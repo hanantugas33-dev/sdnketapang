@@ -2,14 +2,24 @@
 require_once 'config.php';
 
 $pdo = getDB();
-$limit = (int)($_GET['limit'] ?? 6);
+$jabatan = $_GET['jabatan'] ?? 'semua';
 
-$stmt = $pdo->prepare("
-    SELECT id, nama_prestasi, deskripsi, tingkat, juara, medali, gambar, raih_oleh, tahun, kategori
-    FROM prestasi
-    ORDER BY is_featured DESC, tahun DESC, urutan ASC
-    LIMIT ?
-");
-$stmt->execute([$limit]);
+if ($jabatan !== 'semua') {
+    $stmt = $pdo->prepare("
+        SELECT id, nama, nip, jabatan, jabatan_singkat, mapel, bidang, kelas, foto
+        FROM guru
+        WHERE is_active = 1 AND jabatan_singkat = ?
+        ORDER BY urutan ASC
+    ");
+    $stmt->execute([$jabatan]);
+} else {
+    $stmt = $pdo->prepare("
+        SELECT id, nama, nip, jabatan, jabatan_singkat, mapel, bidang, kelas, foto
+        FROM guru
+        WHERE is_active = 1
+        ORDER BY urutan ASC
+    ");
+    $stmt->execute();
+}
 
 jsonResponse($stmt->fetchAll());

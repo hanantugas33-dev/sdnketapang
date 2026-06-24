@@ -1,55 +1,43 @@
 <?php
-// ============================================================
-// CONFIG: Koneksi Database
-// Edit sesuai konfigurasi server lokal / hosting Anda
-// ============================================================
+require_once 'config.php';
 
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');        // Ganti dengan user MySQL Anda
-define('DB_PASS', '');            // Ganti dengan password MySQL Anda
-define('DB_NAME', 'sdn_ketapang');
-define('DB_CHARSET', 'utf8mb4');
-
-// CORS & JSON header — hanya dikirim kalau entry point-nya file di folder /api/
-// (bukan ketika di-include dari halaman admin)
-if (str_starts_with(realpath($_SERVER['SCRIPT_FILENAME']), realpath(__DIR__))) {
-    header('Content-Type: application/json; charset=utf-8');
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type');
-
-    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-        http_response_code(204);
-        exit;
-    }
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    jsonResponse(['error' => 'Method not allowed'], 405);
 }
 
-// ============================================================
-// Fungsi koneksi PDO
-// ============================================================
-function getDB(): PDO {
-    static $pdo = null;
-    if ($pdo === null) {
-        $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
-        $options = [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-        ];
-        try {
-            $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
-        } catch (PDOException $e) {
-            http_response_code(500);
-            echo json_encode(['error' => 'Koneksi database gagal: ' . $e->getMessage()]);
-            exit;
-        }
-    }
-    return $pdo;
+$body = json_decode(file_get_contents('php://input'), true);
+if (!$body) {
+    jsonResponse(['success' => false, 'message' => 'Data tidak valid'], 400);
 }
 
-// Helper response
-function jsonResponse(array $data, int $code = 200): void {
-    http_response_code($code);
-    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-    exit;
+$nama      = trim($body['nama'] ?? '');
+$hp        = trim($body['hp'] ?? '');
+$email     = trim($body['email'] ?? '');
+$keperluan = trim($body['keperluan'] ?? '');
+$pesan     = trim($body['pesan'] ?? '');
+
+// Validasi server-side
+if (!$nama || !$keperluan || !$pesan) {
+    jsonResponse(['success' => false, 'message' => 'Nama, keperluan, dan pesan wajib diisi'], 422);
 }
+if (strlen($nama) > 150 || strlen($pesan) > 3000) {
+    jsonResponse(['success' => false, 'message' => 'Input terlalu panjang'], 422);
+}
+if ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    jsonResponse(['success' => false, 'message' => 'Format email tidak valid'], 422);
+}
+
+$ip = $_SERVER['REMOTE_ADDR'] ?? null;
+
+$pdo = getDB();
+$stmt = $pdo->prepare("
+    INSERT INTO buku_tamu (nama, hp, email, keperluan, pesan, ip_address)
+    VALUES (?, ?, ?, ?, ?, ?)
+");
+$stmt->execute([$nama, $hp, $email, $keperluan, $pesan, $ip]);
+
+jsonResponse([
+    'success' => true,
+    'message' => 'Pesan berhasil dikirim! Kami akan merespons dalam 1–2 hari kerja.',
+    'id'      => $pdo->lastInsertId()
+]);

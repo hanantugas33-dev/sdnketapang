@@ -1,346 +1,264 @@
 <?php
-$pageTitle  = 'Data Siswa';
-$pageActive = 'siswa';
+$pageTitle  = 'Profil Sekolah';
+$pageActive = 'profil';
 require_once 'auth.php';
 
 $db  = getDB();
 $msg = '';
 
-// ── DELETE ────────────────────────────────────────────────────────────────────
-if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
-    $db->prepare("DELETE FROM data_siswa WHERE id=?")->execute([(int)$_GET['delete']]);
-    header('Location: siswa.php?msg=deleted'); exit;
-}
-
-// ── SAVE / UPDATE ─────────────────────────────────────────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $id        = (int)($_POST['id'] ?? 0);
-    $tahun     = trim($_POST['tahun_ajaran'] ?? '');
-    $tingkat   = (int)($_POST['tingkat'] ?? 1);
-    $rombel    = strtoupper(trim($_POST['rombel'] ?? 'A'));
-    $kelas     = $tingkat . $rombel;
-    $laki      = (int)($_POST['laki_laki'] ?? 0);
-    $perempuan = (int)($_POST['perempuan'] ?? 0);
-    $wali      = trim($_POST['wali_kelas'] ?? '');
-    $catatan   = trim($_POST['catatan'] ?? '');
-
-    if ($id) {
-        $db->prepare("UPDATE data_siswa SET tahun_ajaran=?,kelas=?,tingkat=?,rombel=?,laki_laki=?,perempuan=?,wali_kelas=?,catatan=? WHERE id=?")
-           ->execute([$tahun, $kelas, $tingkat, $rombel, $laki, $perempuan, $wali, $catatan, $id]);
+// SAVE PROFIL
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profil'])) {
+    $fields = ['nama_sekolah','npsn','nss','akreditasi','tahun_berdiri','alamat','kelurahan','kecamatan','kabupaten_kota','provinsi','kode_pos','telepon','email','website','total_siswa','total_guru','total_kelas','jam_operasional','maps_embed','visi','misi','tujuan','sejarah'];
+    $vals = [];
+    foreach ($fields as $f) $vals[$f] = trim($_POST[$f] ?? '');
+    // Cek ada atau belum
+    $count = $db->query("SELECT COUNT(*) FROM profil_sekolah")->fetchColumn();
+    if ($count) {
+        $set = implode(',', array_map(fn($f) => "$f=?", $fields));
+        $db->prepare("UPDATE profil_sekolah SET $set LIMIT 1")->execute(array_values($vals));
     } else {
-        $db->prepare("INSERT INTO data_siswa (tahun_ajaran,kelas,tingkat,rombel,laki_laki,perempuan,wali_kelas,catatan) VALUES (?,?,?,?,?,?,?,?)")
-           ->execute([$tahun, $kelas, $tingkat, $rombel, $laki, $perempuan, $wali, $catatan]);
+        $cols = implode(',', $fields);
+        $phs  = implode(',', array_fill(0, count($fields), '?'));
+        $db->prepare("INSERT INTO profil_sekolah ($cols) VALUES ($phs)")->execute(array_values($vals));
     }
-    header('Location: siswa.php?msg=saved'); exit;
+    header('Location: profil.php?msg=saved'); exit;
 }
 
-// ── EDIT MODE ─────────────────────────────────────────────────────────────────
-$edit     = null;
-$showForm = isset($_GET['action']) || isset($_GET['edit']);
-if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
-    $s = $db->prepare("SELECT * FROM data_siswa WHERE id=?");
-    $s->execute([(int)$_GET['edit']]);
-    $edit     = $s->fetch();
-    $showForm = true;
+// SAVE STRUKTUR
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_struktur'])) {
+    $id      = (int)($_POST['id'] ?? 0);
+    $nama    = trim($_POST['nama'] ?? '');
+    $jabatan = trim($_POST['jabatan'] ?? '');
+    $nip     = trim($_POST['nip'] ?? '');
+    $level   = $_POST['level'] ?? 'staff';
+    $urutan  = (int)($_POST['urutan'] ?? 0);
+    $allowed = ['kepala','komite','wakil','staff','koordinator','guru_kelas','guru_mapel','penunjang','siswa'];
+    if (!in_array($level, $allowed)) $level = 'staff';
+    if ($id) {
+        $db->prepare("UPDATE struktur_organisasi SET nama=?,jabatan=?,nip=?,level=?,urutan=? WHERE id=?")->execute([$nama,$jabatan,$nip,$level,$urutan,$id]);
+    } else {
+        $db->prepare("INSERT INTO struktur_organisasi (nama,jabatan,nip,level,urutan,is_active) VALUES (?,?,?,?,?,1)")->execute([$nama,$jabatan,$nip,$level,$urutan]);
+    }
+    header('Location: profil.php?tab=struktur&msg=saved'); exit;
 }
 
-// ── DATA LIST ─────────────────────────────────────────────────────────────────
-$tahunList  = $db->query("SELECT DISTINCT tahun_ajaran FROM data_siswa ORDER BY tahun_ajaran DESC")->fetchAll(PDO::FETCH_COLUMN);
-$tahunAktif = $_GET['tahun'] ?? ($tahunList[0] ?? date('Y') . '/' . (date('Y') + 1));
-
-$stmt = $db->prepare("SELECT * FROM data_siswa WHERE tahun_ajaran=? ORDER BY tingkat, rombel");
-$stmt->execute([$tahunAktif]);
-$list = $stmt->fetchAll();
-
-$totalL = array_sum(array_column($list, 'laki_laki'));
-$totalP = array_sum(array_column($list, 'perempuan'));
-$totalS = $totalL + $totalP;
-
-if (isset($_GET['msg'])) {
-    $msg = $_GET['msg'] === 'saved' ? '✅ Data siswa berhasil disimpan!' : '🗑️ Data kelas berhasil dihapus.';
+// DELETE STRUKTUR
+if (isset($_GET['del_str']) && is_numeric($_GET['del_str'])) {
+    $db->prepare("DELETE FROM struktur_organisasi WHERE id=?")->execute([(int)$_GET['del_str']]);
+    header('Location: profil.php?tab=struktur&msg=deleted'); exit;
 }
+
+$profil   = $db->query("SELECT * FROM profil_sekolah LIMIT 1")->fetch() ?: [];
+$struktur = $db->query("SELECT * FROM struktur_organisasi WHERE is_active=1 ORDER BY urutan")->fetchAll();
+
+$editStr = null;
+if (isset($_GET['edit_str']) && is_numeric($_GET['edit_str'])) {
+    $s = $db->prepare("SELECT * FROM struktur_organisasi WHERE id=?");
+    $s->execute([(int)$_GET['edit_str']]);
+    $editStr = $s->fetch();
+}
+
+$activeTab = $_GET['tab'] ?? 'info';
+if (isset($_GET['msg'])) $msg = $_GET['msg']==='saved' ? '✅ Berhasil disimpan!' : '🗑️ Berhasil dihapus.';
 
 require_once 'layout.php';
 ?>
 
 <?php if ($msg): ?><div class="alert alert-success"><?= $msg ?></div><?php endif; ?>
 
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
-  <div class="page-tabs" style="margin-bottom:0">
-    <button class="page-tab <?= !$showForm?'active':'' ?>" onclick="location='siswa.php'">📋 Data Kelas</button>
-    <button class="page-tab <?= $showForm?'active':'' ?>" onclick="location='siswa.php?action=new'">
-      <?= $edit ? '✏️ Edit Kelas' : '➕ Tambah Kelas' ?>
-    </button>
-  </div>
-  <?php if (!$showForm): ?>
-  <div style="display:flex;gap:10px;align-items:center;">
-    <select onchange="location='siswa.php?tahun='+this.value"
-            style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;background:white;">
-      <?php foreach ($tahunList as $t): ?>
-        <option value="<?= htmlspecialchars($t) ?>" <?= $t===$tahunAktif?'selected':'' ?>>TA <?= htmlspecialchars($t) ?></option>
-      <?php endforeach; ?>
-    </select>
-    <a href="siswa.php?action=new" class="btn btn-primary">➕ Tambah Kelas</a>
-  </div>
-  <?php endif; ?>
+<div class="page-tabs">
+  <button class="page-tab <?= $activeTab==='info'?'active':'' ?>" onclick="location='profil.php?tab=info'">🏫 Info Sekolah</button>
+  <button class="page-tab <?= $activeTab==='visi'?'active':'' ?>" onclick="location='profil.php?tab=visi'">🔭 Visi Misi & Tujuan</button>
+  <button class="page-tab <?= $activeTab==='sejarah'?'active':'' ?>" onclick="location='profil.php?tab=sejarah'">📜 Sejarah</button>
+  <button class="page-tab <?= $activeTab==='struktur'?'active':'' ?>" onclick="location='profil.php?tab=struktur'">🏛️ Struktur Organisasi</button>
+  <button class="page-tab <?= $activeTab==='kontak'?'active':'' ?>" onclick="location='profil.php?tab=kontak'">📍 Kontak & Maps</button>
 </div>
 
-<?php if ($showForm): ?>
-<!-- ═══ FORM ═══ -->
-<div class="card">
-  <div class="card-head">
-    <h2><?= $edit ? '✏️ Edit Data Kelas' : '➕ Tambah Data Kelas' ?></h2>
-    <a href="siswa.php" class="btn btn-outline btn-sm">← Kembali</a>
-  </div>
-  <div class="card-body">
-    <form method="POST">
-      <input type="hidden" name="id" value="<?= $edit['id'] ?? 0 ?>"/>
-      <div class="form-row">
+<?php if ($activeTab === 'struktur'): ?>
+<!-- TAB STRUKTUR -->
+<div style="display:grid;grid-template-columns:1fr 1.2fr;gap:20px;">
 
+  <div class="card">
+    <div class="card-head"><h2><?= $editStr ? '✏️ Edit Jabatan' : '➕ Tambah Jabatan' ?></h2></div>
+    <div class="card-body">
+      <form method="POST">
+        <input type="hidden" name="save_struktur" value="1"/>
+        <input type="hidden" name="id" value="<?= $editStr['id'] ?? 0 ?>"/>
         <div class="form-group">
-          <label>Tahun Ajaran *</label>
-          <input type="text" name="tahun_ajaran"
-                 value="<?= htmlspecialchars($edit['tahun_ajaran'] ?? $tahunAktif) ?>"
-                 placeholder="2025/2026" required/>
-          <div class="form-hint">Format: YYYY/YYYY</div>
+          <label>Nama + Gelar *</label>
+          <input type="text" name="nama" value="<?= htmlspecialchars($editStr['nama']??'') ?>" required placeholder="Budi Santoso, S.Pd."/>
         </div>
-
         <div class="form-group">
-          <label>Preview Nama Kelas</label>
-          <div id="kelasPreview"
-               style="padding:10px 14px;background:#fff5f5;border:2px solid var(--red);border-radius:8px;font-weight:700;font-size:20px;color:var(--red);text-align:center;">
-            <?= htmlspecialchars($edit['kelas'] ?? '1A') ?>
-          </div>
+          <label>Jabatan *</label>
+          <input type="text" name="jabatan" value="<?= htmlspecialchars($editStr['jabatan']??'') ?>" required placeholder="Kepala Sekolah"/>
         </div>
-
         <div class="form-group">
-          <label>Tingkat / Kelas *</label>
-          <select name="tingkat" id="selTingkat" onchange="updatePreview()">
-            <?php for ($i=1;$i<=6;$i++): ?>
-              <option value="<?= $i ?>" <?= ($edit['tingkat']??1)==$i?'selected':'' ?>>Kelas <?= $i ?></option>
-            <?php endfor; ?>
+          <label>NIP (opsional)</label>
+          <input type="text" name="nip" value="<?= htmlspecialchars($editStr['nip']??'') ?>" placeholder="Kosongkan jika tidak ada"/>
+        </div>
+        <div class="form-group">
+          <label>Level / Hierarki</label>
+          <select name="level">
+            <option value="kepala"      <?= ($editStr['level']??'')==='kepala'      ?'selected':'' ?>>👑 Kepala Sekolah</option>
+            <option value="komite"      <?= ($editStr['level']??'')==='komite'      ?'selected':'' ?>>🤝 Komite Sekolah</option>
+            <option value="wakil"       <?= ($editStr['level']??'')==='wakil'       ?'selected':'' ?>>🔑 Wakil Kepala Sekolah</option>
+            <option value="staff"       <?= ($editStr['level']??'staff')==='staff'  ?'selected':'' ?>>💼 Staff Admin (TU/Bendahara/Operator)</option>
+            <option value="koordinator" <?= ($editStr['level']??'')==='koordinator' ?'selected':'' ?>>📋 Koordinator</option>
+            <option value="guru_kelas"  <?= ($editStr['level']??'')==='guru_kelas'  ?'selected':'' ?>>📚 Guru Kelas</option>
+            <option value="guru_mapel"  <?= ($editStr['level']??'')==='guru_mapel'  ?'selected':'' ?>>🎓 Guru Mata Pelajaran</option>
+            <option value="penunjang"   <?= ($editStr['level']??'')==='penunjang'   ?'selected':'' ?>>🛠️ Tenaga Penunjang (Perpus/UKS/Kebersihan)</option>
+            <option value="siswa"       <?= ($editStr['level']??'')==='siswa'       ?'selected':'' ?>>🎒 Siswa</option>
           </select>
         </div>
-
         <div class="form-group">
-          <label>Rombel *</label>
-          <input type="text" name="rombel" id="inpRombel"
-                 value="<?= htmlspecialchars($edit['rombel'] ?? 'A') ?>"
-                 placeholder="A" maxlength="3" required
-                 oninput="updatePreview()" style="text-transform:uppercase"/>
-          <div class="form-hint">Contoh: A, B, C</div>
+          <label>Urutan Tampil</label>
+          <input type="number" name="urutan" value="<?= $editStr['urutan']??0 ?>" min="0"/>
         </div>
+        <div style="display:flex;gap:8px;">
+          <?php if ($editStr): ?><a href="profil.php?tab=struktur" class="btn btn-outline">Batal</a><?php endif; ?>
+          <button type="submit" class="btn btn-primary">💾 Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
+  <div class="card">
+    <div class="card-head"><h2>Daftar Struktur Organisasi</h2></div>
+    <?php
+    $levelLabel = [
+      'kepala'      => ['👑 Kepala Sekolah',     '#fdecea','#B71C1C'],
+      'komite'      => ['🤝 Komite',              '#fffbeb','#92400e'],
+      'wakil'       => ['🔑 Wakil Kepala',        '#fef2f2','#991b1b'],
+      'staff'       => ['💼 Staff Admin',          '#eff6ff','#1d4ed8'],
+      'koordinator' => ['📋 Koordinator',          '#ecfdf5','#065f46'],
+      'guru_kelas'  => ['📚 Guru Kelas',           '#f5f3ff','#4c1d95'],
+      'guru_mapel'  => ['🎓 Guru Mapel',           '#fff7ed','#9a3412'],
+      'penunjang'   => ['🛠️ Penunjang',            '#f9fafb','#374151'],
+      'siswa'       => ['🎒 Siswa',                '#f1f5f9','#1e293b'],
+    ];
+    ?>
+    <?php if ($struktur): ?>
+    <table class="data-table">
+      <thead><tr><th>#</th><th>Nama</th><th>Jabatan</th><th>Level</th><th style="width:80px">Urutan</th><th>Aksi</th></tr></thead>
+      <tbody>
+        <?php foreach ($struktur as $i => $s):
+          $lv = $levelLabel[$s['level']] ?? ['🔹 '.$s['level'],'#f3f4f6','#374151'];
+        ?>
+        <tr>
+          <td style="color:#9ca3af;font-size:12px"><?= $i+1 ?></td>
+          <td style="font-weight:600"><?= htmlspecialchars($s['nama']) ?></td>
+          <td style="color:#6b7280"><?= htmlspecialchars($s['jabatan']) ?></td>
+          <td>
+            <span style="background:<?= $lv[1] ?>;color:<?= $lv[2] ?>;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap">
+              <?= $lv[0] ?>
+            </span>
+          </td>
+          <td style="text-align:center;color:#9ca3af"><?= $s['urutan'] ?></td>
+          <td>
+            <div class="td-actions">
+              <a href="profil.php?tab=struktur&edit_str=<?= $s['id'] ?>" class="btn btn-outline btn-sm">✏️ Edit</a>
+              <a href="profil.php?del_str=<?= $s['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Hapus <?= htmlspecialchars(addslashes($s['nama'])) ?>?')">🗑️</a>
+            </div>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+    <?php else: ?>
+    <div class="empty-state"><div>🏛️</div><p>Belum ada data struktur organisasi.</p></div>
+    <?php endif; ?>
+  </div>
+</div>
+
+<?php else: ?>
+<div class="card">
+  <div class="card-head"><h2>Edit <?= ['info'=>'Informasi Sekolah','visi'=>'Visi, Misi & Tujuan','sejarah'=>'Sejarah Sekolah','kontak'=>'Kontak & Lokasi'][$activeTab] ?? '' ?></h2></div>
+  <div class="card-body">
+    <form method="POST">
+      <input type="hidden" name="save_profil" value="1"/>
+      <!-- Hidden fields untuk field lain yang tidak ditampilkan di tab ini -->
+      <?php foreach (['nama_sekolah','npsn','nss','akreditasi','tahun_berdiri','alamat','kelurahan','kecamatan','kabupaten_kota','provinsi','kode_pos','telepon','email','website','total_siswa','total_guru','total_kelas','jam_operasional','maps_embed','visi','misi','tujuan','sejarah'] as $f): ?>
+        <?php if (!in_array($f, ['nama_sekolah','npsn','nss','akreditasi','tahun_berdiri','alamat','kelurahan','kecamatan','kabupaten_kota','provinsi','kode_pos','telepon','email','website','total_siswa','total_guru','total_kelas'])
+               || $activeTab !== 'info'): ?>
+          <?php if (!in_array($f, ['visi','misi','tujuan']) || $activeTab !== 'visi'): ?>
+            <?php if ($f !== 'sejarah' || $activeTab !== 'sejarah'): ?>
+              <?php if (!in_array($f, ['alamat','kode_pos','telepon','email','website','maps_embed','jam_operasional']) || $activeTab !== 'kontak'): ?>
+                <input type="hidden" name="<?= $f ?>" value="<?= htmlspecialchars($profil[$f]??'') ?>"/>
+              <?php endif; ?>
+            <?php endif; ?>
+          <?php endif; ?>
+        <?php endif; ?>
+      <?php endforeach; ?>
+
+      <?php if ($activeTab === 'info'): ?>
+      <div class="form-row">
         <div class="form-group full">
-          <label>Wali Kelas (Opsional)</label>
-          <input type="text" name="wali_kelas"
-                 value="<?= htmlspecialchars($edit['wali_kelas'] ?? '') ?>"
-                 placeholder="Nama wali kelas"/>
+          <label>Nama Sekolah *</label>
+          <input type="text" name="nama_sekolah" value="<?= htmlspecialchars($profil['nama_sekolah']??'SDN Ketapang') ?>" required/>
         </div>
-
-        <!-- Laki-laki -->
+        <div class="form-group"><label>NPSN</label><input type="text" name="npsn" value="<?= htmlspecialchars($profil['npsn']??'') ?>" placeholder="8 digit"/></div>
+        <div class="form-group"><label>NSS</label><input type="text" name="nss" value="<?= htmlspecialchars($profil['nss']??'') ?>"/></div>
         <div class="form-group">
-          <label>👦 Jumlah Siswa Laki-laki</label>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <button type="button" onclick="step('laki_laki',-1)"
-                    style="width:38px;height:38px;border-radius:8px;border:1px solid #ddd;background:white;font-size:20px;cursor:pointer;line-height:1;">−</button>
-            <input type="number" name="laki_laki" id="laki_laki"
-                   value="<?= $edit['laki_laki'] ?? 0 ?>" min="0" max="999"
-                   style="text-align:center;font-size:22px;font-weight:700;width:80px;border:1px solid #ddd;border-radius:8px;padding:6px;"
-                   oninput="updateTotal()"/>
-            <button type="button" onclick="step('laki_laki',1)"
-                    style="width:38px;height:38px;border-radius:8px;border:1px solid #ddd;background:white;font-size:20px;cursor:pointer;line-height:1;">+</button>
-          </div>
+          <label>Akreditasi</label>
+          <select name="akreditasi">
+            <?php foreach (['A','B','C','Belum'] as $a): ?>
+            <option value="<?= $a ?>" <?= ($profil['akreditasi']??'A')===$a?'selected':'' ?>><?= $a ?></option>
+            <?php endforeach; ?>
+          </select>
         </div>
-
-        <!-- Perempuan -->
-        <div class="form-group">
-          <label>👧 Jumlah Siswa Perempuan</label>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <button type="button" onclick="step('perempuan',-1)"
-                    style="width:38px;height:38px;border-radius:8px;border:1px solid #ddd;background:white;font-size:20px;cursor:pointer;line-height:1;">−</button>
-            <input type="number" name="perempuan" id="perempuan"
-                   value="<?= $edit['perempuan'] ?? 0 ?>" min="0" max="999"
-                   style="text-align:center;font-size:22px;font-weight:700;width:80px;border:1px solid #ddd;border-radius:8px;padding:6px;"
-                   oninput="updateTotal()"/>
-            <button type="button" onclick="step('perempuan',1)"
-                    style="width:38px;height:38px;border-radius:8px;border:1px solid #ddd;background:white;font-size:20px;cursor:pointer;line-height:1;">+</button>
-          </div>
-        </div>
-
-        <div class="form-group full">
-          <label>Total Kelas Ini</label>
-          <div id="totalBox"
-               style="display:inline-block;background:var(--dark2);color:white;border-radius:10px;padding:10px 20px;font-family:'Lora',serif;font-size:28px;font-weight:700;">
-            <span id="totalNum"><?= ($edit['laki_laki']??0)+($edit['perempuan']??0) ?></span>
-            <span style="font-size:14px;font-weight:400;opacity:.6;margin-left:6px;">siswa</span>
-          </div>
-        </div>
-
-        <div class="form-group full">
-          <label>Catatan (Opsional)</label>
-          <textarea name="catatan" rows="2"
-                    placeholder="Contoh: termasuk siswa inklusi"><?= htmlspecialchars($edit['catatan'] ?? '') ?></textarea>
-        </div>
-
+        <div class="form-group"><label>Tahun Berdiri</label><input type="number" name="tahun_berdiri" value="<?= $profil['tahun_berdiri']??'' ?>" placeholder="1975" min="1900" max="2099"/></div>
+        <div class="form-group"><label>Total Siswa</label><input type="number" name="total_siswa" value="<?= $profil['total_siswa']??0 ?>"/></div>
+        <div class="form-group"><label>Total Guru & Staf</label><input type="number" name="total_guru" value="<?= $profil['total_guru']??0 ?>"/></div>
+        <div class="form-group"><label>Total Kelas</label><input type="number" name="total_kelas" value="<?= $profil['total_kelas']??0 ?>"/></div>
+        <div class="form-group full"><label>Jam Operasional</label><input type="text" name="jam_operasional" value="<?= htmlspecialchars($profil['jam_operasional']??'') ?>" placeholder="Senin–Jumat: 07.00–13.30 WIB"/></div>
       </div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
-        <a href="siswa.php" class="btn btn-outline">Batal</a>
-        <button type="submit" class="btn btn-primary">💾 Simpan</button>
+
+      <?php elseif ($activeTab === 'visi'): ?>
+      <div class="form-group">
+        <label>Visi Sekolah</label>
+        <textarea name="visi" rows="4" placeholder="Tulis visi sekolah..."><?= htmlspecialchars($profil['visi']??'') ?></textarea>
+      </div>
+      <div class="form-group">
+        <label>Misi Sekolah <span style="color:#999;font-weight:400">(gunakan baris baru untuk tiap poin)</span></label>
+        <textarea name="misi" rows="7" placeholder="Tulis misi 1&#10;Tulis misi 2&#10;Tulis misi 3"><?= htmlspecialchars($profil['misi']??'') ?></textarea>
+      </div>
+      <div class="form-group">
+        <label>Tujuan Sekolah <span style="color:#999;font-weight:400">(gunakan baris baru untuk tiap poin)</span></label>
+        <textarea name="tujuan" rows="5" placeholder="Tulis tujuan 1&#10;Tulis tujuan 2"><?= htmlspecialchars($profil['tujuan']??'') ?></textarea>
+      </div>
+
+      <?php elseif ($activeTab === 'sejarah'): ?>
+      <div class="form-group">
+        <label>Sejarah Sekolah</label>
+        <textarea name="sejarah" rows="12" placeholder="Tulis sejarah lengkap sekolah di sini..."><?= htmlspecialchars($profil['sejarah']??'') ?></textarea>
+        <div class="form-hint">Gunakan paragraf biasa. Teks ini akan ditampilkan di halaman profil sekolah.</div>
+      </div>
+
+      <?php elseif ($activeTab === 'kontak'): ?>
+      <div class="form-row">
+        <div class="form-group full"><label>Alamat Lengkap</label><input type="text" name="alamat" value="<?= htmlspecialchars($profil['alamat']??'') ?>"/></div>
+        <div class="form-group"><label>Kelurahan/Desa</label><input type="text" name="kelurahan" value="<?= htmlspecialchars($profil['kelurahan']??'') ?>"/></div>
+        <div class="form-group"><label>Kecamatan</label><input type="text" name="kecamatan" value="<?= htmlspecialchars($profil['kecamatan']??'') ?>"/></div>
+        <div class="form-group"><label>Kabupaten/Kota</label><input type="text" name="kabupaten_kota" value="<?= htmlspecialchars($profil['kabupaten_kota']??'') ?>"/></div>
+        <div class="form-group"><label>Provinsi</label><input type="text" name="provinsi" value="<?= htmlspecialchars($profil['provinsi']??'') ?>"/></div>
+        <div class="form-group"><label>Kode Pos</label><input type="text" name="kode_pos" value="<?= htmlspecialchars($profil['kode_pos']??'') ?>"/></div>
+        <div class="form-group"><label>Nomor Telepon</label><input type="text" name="telepon" value="<?= htmlspecialchars($profil['telepon']??'') ?>"/></div>
+        <div class="form-group"><label>Email Resmi</label><input type="email" name="email" value="<?= htmlspecialchars($profil['email']??'') ?>"/></div>
+        <div class="form-group full"><label>Website</label><input type="url" name="website" value="<?= htmlspecialchars($profil['website']??'') ?>" placeholder="https://sdnketapang.sch.id"/></div>
+        <div class="form-group full">
+          <label>Google Maps Embed Code</label>
+          <textarea name="maps_embed" rows="4" placeholder='Paste kode iframe dari Google Maps di sini...\n<iframe src="https://www.google.com/maps/embed?pb=..." ...></iframe>'><?= htmlspecialchars($profil['maps_embed']??'') ?></textarea>
+          <div class="form-hint">📌 Cara: Google Maps → cari sekolah → Bagikan → Sematkan peta → Salin kode iframe</div>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+        <button type="submit" class="btn btn-primary">💾 Simpan Perubahan</button>
       </div>
     </form>
   </div>
 </div>
-<script>
-function step(id, d) {
-    const el = document.getElementById(id);
-    el.value = Math.max(0, parseInt(el.value||0) + d);
-    updateTotal();
-}
-function updateTotal() {
-    const l = parseInt(document.getElementById('laki_laki').value||0);
-    const p = parseInt(document.getElementById('perempuan').value||0);
-    document.getElementById('totalNum').textContent = l + p;
-}
-function updatePreview() {
-    const t = document.getElementById('selTingkat').value;
-    const r = document.getElementById('inpRombel').value.toUpperCase();
-    document.getElementById('kelasPreview').textContent = t + r;
-}
-</script>
-
-<?php else: ?>
-<!-- ═══ TABEL ═══ -->
-
-<!-- Stats -->
-<div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
-  <div class="stat-box">
-    <div class="stat-num"><?= $totalS ?></div>
-    <div class="stat-lbl">🎒 Total Semua Siswa</div>
-  </div>
-  <div class="stat-box" style="border-color:#1565C0">
-    <div class="stat-num" style="color:#1565C0"><?= $totalL ?></div>
-    <div class="stat-lbl">👦 Laki-laki</div>
-  </div>
-  <div class="stat-box" style="border-color:#880E4F">
-    <div class="stat-num" style="color:#880E4F"><?= $totalP ?></div>
-    <div class="stat-lbl">👧 Perempuan</div>
-  </div>
-  <div class="stat-box gold">
-    <div class="stat-num"><?= count($list) ?></div>
-    <div class="stat-lbl">🏫 Jumlah Rombel</div>
-  </div>
-</div>
-
-<?php if ($list):
-    $grouped = [];
-    foreach ($list as $r) $grouped[$r['tingkat']][] = $r;
-?>
-
-<div style="display:flex;flex-direction:column;gap:16px;">
-<?php foreach ($grouped as $tingkat => $rows):
-    $subL = array_sum(array_column($rows,'laki_laki'));
-    $subP = array_sum(array_column($rows,'perempuan'));
-?>
-<div class="card">
-  <div class="card-head">
-    <div>
-      <h2>Kelas <?= $tingkat ?></h2>
-      <div style="font-size:12px;color:var(--muted);margin-top:2px;">
-        <?= count($rows) ?> rombel &nbsp;·&nbsp; Total: <strong><?= $subL+$subP ?></strong> siswa
-        &nbsp;(L: <?= $subL ?> / P: <?= $subP ?>)
-      </div>
-    </div>
-  </div>
-  <table class="data-table">
-    <thead>
-      <tr>
-        <th>Kelas</th><th>Wali Kelas</th>
-        <th style="text-align:center">👦 L</th>
-        <th style="text-align:center">👧 P</th>
-        <th style="text-align:center">Total</th>
-        <th>Aksi</th>
-      </tr>
-    </thead>
-    <tbody>
-    <?php foreach ($rows as $k): ?>
-      <tr>
-        <td>
-          <span style="display:inline-flex;align-items:center;justify-content:center;
-                       width:36px;height:36px;border-radius:8px;
-                       background:var(--red);color:white;font-weight:700;font-size:14px;">
-            <?= htmlspecialchars($k['kelas']) ?>
-          </span>
-        </td>
-        <td style="font-size:13px;color:#444;">
-          <?= $k['wali_kelas'] ? htmlspecialchars($k['wali_kelas']) : '<span style="color:#ccc">—</span>' ?>
-        </td>
-        <td style="text-align:center;font-weight:600;color:#1565C0;"><?= $k['laki_laki'] ?></td>
-        <td style="text-align:center;font-weight:600;color:#880E4F;"><?= $k['perempuan'] ?></td>
-        <td style="text-align:center;font-weight:700;font-size:16px;"><?= $k['laki_laki']+$k['perempuan'] ?></td>
-        <td>
-          <div class="td-actions">
-            <a href="siswa.php?edit=<?= $k['id'] ?>" class="btn btn-outline btn-sm">✏️</a>
-            <a href="siswa.php?delete=<?= $k['id'] ?>"
-               class="btn btn-danger btn-sm"
-               onclick="return confirm('Hapus kelas <?= htmlspecialchars(addslashes($k['kelas'])) ?>?')">🗑️</a>
-          </div>
-        </td>
-      </tr>
-    <?php endforeach; ?>
-    </tbody>
-    <tfoot>
-      <tr style="background:#fafafa;">
-        <td colspan="2" style="padding:10px 16px;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;">
-          SUBTOTAL
-        </td>
-        <td style="text-align:center;font-weight:700;color:#1565C0;padding:10px 16px;"><?= $subL ?></td>
-        <td style="text-align:center;font-weight:700;color:#880E4F;padding:10px 16px;"><?= $subP ?></td>
-        <td style="text-align:center;font-weight:700;font-size:16px;padding:10px 16px;"><?= $subL+$subP ?></td>
-        <td></td>
-      </tr>
-    </tfoot>
-  </table>
-</div>
-<?php endforeach; ?>
-</div>
-
-<!-- Grand Total -->
-<div class="card" style="margin-top:16px;background:linear-gradient(135deg,var(--dark2),var(--dark3));color:white;">
-  <div class="card-body" style="display:flex;align-items:center;gap:32px;justify-content:center;padding:28px;flex-wrap:wrap;">
-    <div style="text-align:center;">
-      <div style="font-size:11px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:1px;">Total Siswa</div>
-      <div style="font-family:'Lora',serif;font-size:44px;font-weight:700;color:var(--gold);"><?= $totalS ?></div>
-      <div style="font-size:11px;color:rgba(255,255,255,.3);">Angka tampil di halaman utama</div>
-    </div>
-    <div style="width:1px;height:60px;background:rgba(255,255,255,.1);"></div>
-    <div style="text-align:center;">
-      <div style="font-size:11px;color:rgba(255,255,255,.4);">Laki-laki</div>
-      <div style="font-size:30px;font-weight:700;color:#90CAF9;"><?= $totalL ?></div>
-    </div>
-    <div style="text-align:center;">
-      <div style="font-size:11px;color:rgba(255,255,255,.4);">Perempuan</div>
-      <div style="font-size:30px;font-weight:700;color:#F48FB1;"><?= $totalP ?></div>
-    </div>
-    <div style="width:1px;height:60px;background:rgba(255,255,255,.1);"></div>
-    <div style="text-align:center;">
-      <div style="font-size:11px;color:rgba(255,255,255,.4);">Rombel</div>
-      <div style="font-size:30px;font-weight:700;color:rgba(255,255,255,.8);"><?= count($list) ?></div>
-    </div>
-    <div style="text-align:center;">
-      <div style="font-size:11px;color:rgba(255,255,255,.4);">Tahun Ajaran</div>
-      <div style="font-size:18px;font-weight:700;color:rgba(255,255,255,.8);"><?= htmlspecialchars($tahunAktif) ?></div>
-    </div>
-  </div>
-</div>
-
-<?php else: ?>
-<div class="empty-state">
-  <div>🎒</div>
-  <p>Belum ada data siswa untuk TA <strong><?= htmlspecialchars($tahunAktif) ?></strong>.</p>
-  <a href="siswa.php?action=new" class="btn btn-primary" style="margin-top:12px;">➕ Tambah Data Kelas</a>
-</div>
-<?php endif; ?>
 <?php endif; ?>
 
 <?php require_once 'layout_end.php'; ?>

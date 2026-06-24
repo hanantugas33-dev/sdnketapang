@@ -1,43 +1,41 @@
 <?php
 require_once 'config.php';
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    jsonResponse(['error' => 'Method not allowed'], 405);
-}
+$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-$body = json_decode(file_get_contents('php://input'), true);
-if (!$body) {
-    jsonResponse(['success' => false, 'message' => 'Data tidak valid'], 400);
+if ($id <= 0) {
+    http_response_code(400);
+    jsonResponse(['error' => 'ID tidak valid']);
 }
-
-$nama      = trim($body['nama'] ?? '');
-$hp        = trim($body['hp'] ?? '');
-$email     = trim($body['email'] ?? '');
-$keperluan = trim($body['keperluan'] ?? '');
-$pesan     = trim($body['pesan'] ?? '');
-
-// Validasi server-side
-if (!$nama || !$keperluan || !$pesan) {
-    jsonResponse(['success' => false, 'message' => 'Nama, keperluan, dan pesan wajib diisi'], 422);
-}
-if (strlen($nama) > 150 || strlen($pesan) > 3000) {
-    jsonResponse(['success' => false, 'message' => 'Input terlalu panjang'], 422);
-}
-if ($email && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    jsonResponse(['success' => false, 'message' => 'Format email tidak valid'], 422);
-}
-
-$ip = $_SERVER['REMOTE_ADDR'] ?? null;
 
 $pdo = getDB();
-$stmt = $pdo->prepare("
-    INSERT INTO buku_tamu (nama, hp, email, keperluan, pesan, ip_address)
-    VALUES (?, ?, ?, ?, ?, ?)
-");
-$stmt->execute([$nama, $hp, $email, $keperluan, $pesan, $ip]);
 
-jsonResponse([
-    'success' => true,
-    'message' => 'Pesan berhasil dikirim! Kami akan merespons dalam 1–2 hari kerja.',
-    'id'      => $pdo->lastInsertId()
-]);
+// Ambil berita berdasarkan ID
+$stmt = $pdo->prepare("
+    SELECT id, judul, slug, kategori, konten, ringkasan, gambar, icon,
+           DATE_FORMAT(tanggal, '%d %M %Y') AS tanggal_format
+    FROM berita
+    WHERE id = ? AND status = 'publish'
+    LIMIT 1
+");
+$stmt->execute([$id]);
+$berita = $stmt->fetch();
+
+if (!$berita) {
+    http_response_code(404);
+    jsonResponse(['error' => 'Berita tidak ditemukan']);
+}
+
+// Ambil berita terkait (kategori sama, beda ID)
+$stmt2 = $pdo->prepare("
+    SELECT id, judul, kategori, ringkasan, gambar, icon,
+           DATE_FORMAT(tanggal, '%d %M %Y') AS tanggal_format
+    FROM berita
+    WHERE status = 'publish' AND kategori = ? AND id != ?
+    ORDER BY tanggal DESC
+    LIMIT 3
+");
+$stmt2->execute([$berita['kategori'], $id]);
+$berita['terkait'] = $stmt2->fetchAll();
+
+jsonResponse($berita);

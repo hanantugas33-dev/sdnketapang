@@ -1,46 +1,59 @@
 <?php
 require_once 'config.php';
 
+// Cache response di browser selama 30 detik
+// Setelah admin simpan data baru, user akan dapat data terbaru dalam maks 30 detik
 header('Cache-Control: public, max-age=30');
 
-$pdo    = getDB();
+$pdo = getDB();
 $action = $_GET['action'] ?? 'all';
-$tahun  = $_GET['tahun']  ?? '';
 
-// Total semua siswa (tahun ajaran terbaru)
-if ($action === 'total') {
-    $q = $pdo->query("
-        SELECT COALESCE(SUM(laki_laki + perempuan), 0) AS total
-        FROM data_siswa
-        WHERE tahun_ajaran = (SELECT MAX(tahun_ajaran) FROM data_siswa)
-    ");
-    jsonResponse(['total' => (int)$q->fetchColumn()]);
+// Action: ambil visi, misi, tujuan, sejarah
+if ($action === 'visi_misi') {
+    $profil = $pdo->query("SELECT visi, misi, tujuan, sejarah FROM profil_sekolah LIMIT 1")->fetch();
+    jsonResponse([
+        'visi'    => $profil['visi']    ?? '',
+        'misi'    => $profil['misi']    ?? '',
+        'tujuan'  => $profil['tujuan']  ?? '',
+        'sejarah' => $profil['sejarah'] ?? '',
+    ]);
 }
 
-// Semua kelas
-$where = $tahun ? "WHERE tahun_ajaran = ?" : "WHERE tahun_ajaran = (SELECT MAX(tahun_ajaran) FROM data_siswa)";
-$stmt  = $pdo->prepare("
-    SELECT id, tahun_ajaran, kelas, tingkat, rombel,
-           laki_laki, perempuan, (laki_laki + perempuan) AS total,
-           wali_kelas, catatan
-    FROM data_siswa $where
-    ORDER BY tingkat, rombel
-");
-$tahun ? $stmt->execute([$tahun]) : $stmt->execute();
+if ($action === 'stats') {
+    $profil = $pdo->query("SELECT tahun_berdiri, total_siswa, total_guru, akreditasi FROM profil_sekolah LIMIT 1")->fetch();
 
-$rows      = $stmt->fetchAll();
-$totalL    = array_sum(array_column($rows, 'laki_laki'));
-$totalP    = array_sum(array_column($rows, 'perempuan'));
-$tahunList = $pdo->query("SELECT DISTINCT tahun_ajaran FROM data_siswa ORDER BY tahun_ajaran DESC")->fetchAll(PDO::FETCH_COLUMN);
+    // Total siswa: jumlahkan semua kelas dari data_siswa (tahun ajaran terbaru).
+    // Fallback ke profil_sekolah.total_siswa kalau tabel kosong.
+    $totalSiswa = $profil['total_siswa'] ?? 0;
+    try {
+        $row = $pdo->query("
+            SELECT COALESCE(SUM(laki_laki + perempuan), 0) AS total
+            FROM data_siswa
+            WHERE tahun_ajaran = (SELECT MAX(tahun_ajaran) FROM data_siswa)
+        ")->fetch();
+        if ($row && (int)$row['total'] > 0) {
+            $totalSiswa = (int)$row['total'];
+        }
+    } catch (Exception $e) { /* tabel belum ada, pakai fallback */ }
+
+    jsonResponse([
+        'tahun_berdiri' => $profil['tahun_berdiri'] ?? '—',
+        'total_siswa'   => $totalSiswa,
+        'total_guru'    => $profil['total_guru'] ?? '—',
+        'akreditasi'    => $profil['akreditasi'] ?? 'A',
+    ]);
+}
+
+if ($action === 'struktur') {
+    $rows = $pdo->query("SELECT id, nama, jabatan, nip, level, parent_id FROM struktur_organisasi WHERE is_active=1 ORDER BY urutan ASC")->fetchAll();
+    jsonResponse($rows);
+}
+
+// Default: ambil semua data profil
+$profil = $pdo->query("SELECT * FROM profil_sekolah LIMIT 1")->fetch();
+$akreditasi = $pdo->query("SELECT * FROM akreditasi ORDER BY tanggal_penilaian DESC LIMIT 1")->fetch();
 
 jsonResponse([
-    'tahun_aktif' => $tahun ?: ($rows[0]['tahun_ajaran'] ?? '-'),
-    'tahun_list'  => $tahunList,
-    'kelas'       => $rows,
-    'total'       => [
-        'laki_laki' => $totalL,
-        'perempuan' => $totalP,
-        'semua'     => $totalL + $totalP,
-        'rombel'    => count($rows),
-    ],
+    'profil'     => $profil,
+    'akreditasi' => $akreditasi
 ]);

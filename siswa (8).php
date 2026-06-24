@@ -2,24 +2,27 @@
 require_once 'config.php';
 
 $pdo = getDB();
-$jabatan = $_GET['jabatan'] ?? 'semua';
+$kategori = $_GET['kategori'] ?? 'semua';
+$limit = (int)($_GET['limit'] ?? 12);
 
-if ($jabatan !== 'semua') {
+if ($kategori !== 'semua') {
     $stmt = $pdo->prepare("
-        SELECT id, nama, nip, jabatan, jabatan_singkat, mapel, bidang, kelas, foto
-        FROM guru
-        WHERE is_active = 1 AND jabatan_singkat = ?
+        SELECT id, judul, deskripsi, kategori, gambar, icon, is_large
+        FROM galeri
+        WHERE status = 'aktif' AND kategori = ?
         ORDER BY urutan ASC
+        LIMIT ?
     ");
-    $stmt->execute([$jabatan]);
+    $stmt->execute([$kategori, $limit]);
 } else {
     $stmt = $pdo->prepare("
-        SELECT id, nama, nip, jabatan, jabatan_singkat, mapel, bidang, kelas, foto
-        FROM guru
-        WHERE is_active = 1
+        SELECT id, judul, deskripsi, kategori, gambar, icon, is_large
+        FROM galeri
+        WHERE status = 'aktif'
         ORDER BY urutan ASC
+        LIMIT ?
     ");
-    $stmt->execute();
+    $stmt->execute([$limit]);
 }
 
 jsonResponse($stmt->fetchAll());

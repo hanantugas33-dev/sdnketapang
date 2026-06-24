@@ -2,27 +2,22 @@
 require_once 'config.php';
 
 $pdo = getDB();
-$kategori = $_GET['kategori'] ?? 'semua';
-$limit = (int)($_GET['limit'] ?? 12);
 
-if ($kategori !== 'semua') {
-    $stmt = $pdo->prepare("
-        SELECT id, judul, deskripsi, kategori, gambar, icon, is_large
-        FROM galeri
-        WHERE status = 'aktif' AND kategori = ?
-        ORDER BY urutan ASC
-        LIMIT ?
-    ");
-    $stmt->execute([$kategori, $limit]);
-} else {
-    $stmt = $pdo->prepare("
-        SELECT id, judul, deskripsi, kategori, gambar, icon, is_large
-        FROM galeri
-        WHERE status = 'aktif'
-        ORDER BY urutan ASC
-        LIMIT ?
-    ");
-    $stmt->execute([$limit]);
-}
+$stmtFas = $pdo->query("
+    SELECT id, nama, deskripsi, foto, jumlah, kondisi
+    FROM fasilitas
+    WHERE is_active = 1
+    ORDER BY urutan ASC
+");
 
-jsonResponse($stmt->fetchAll());
+$stmtEkskul = $pdo->query("
+    SELECT id, nama, foto, hari, jam_mulai, jam_selesai, pembina, deskripsi
+    FROM ekskul
+    WHERE is_active = 1
+    ORDER BY urutan ASC
+");
+
+jsonResponse([
+    'fasilitas' => $stmtFas->fetchAll(),
+    'ekskul'    => $stmtEkskul->fetchAll()
+]);

@@ -1,264 +1,319 @@
 <?php
-$pageTitle  = 'Profil Sekolah';
-$pageActive = 'profil';
+$pageTitle  = 'Prestasi Sekolah';
+$pageActive = 'prestasi';
 require_once 'auth.php';
 
 $db  = getDB();
 $msg = '';
+$err = '';
 
-// SAVE PROFIL
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_profil'])) {
-    $fields = ['nama_sekolah','npsn','nss','akreditasi','tahun_berdiri','alamat','kelurahan','kecamatan','kabupaten_kota','provinsi','kode_pos','telepon','email','website','total_siswa','total_guru','total_kelas','jam_operasional','maps_embed','visi','misi','tujuan','sejarah'];
-    $vals = [];
-    foreach ($fields as $f) $vals[$f] = trim($_POST[$f] ?? '');
-    // Cek ada atau belum
-    $count = $db->query("SELECT COUNT(*) FROM profil_sekolah")->fetchColumn();
-    if ($count) {
-        $set = implode(',', array_map(fn($f) => "$f=?", $fields));
-        $db->prepare("UPDATE profil_sekolah SET $set LIMIT 1")->execute(array_values($vals));
-    } else {
-        $cols = implode(',', $fields);
-        $phs  = implode(',', array_fill(0, count($fields), '?'));
-        $db->prepare("INSERT INTO profil_sekolah ($cols) VALUES ($phs)")->execute(array_values($vals));
+// ── Helper upload gambar ──────────────────────────────────────
+function uploadGambarPrestasi($fileKey) {
+    if (empty($_FILES[$fileKey]['name'])) return null;
+    $f   = $_FILES[$fileKey];
+    $ext = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION));
+    $ok  = ['jpg','jpeg','png','webp','gif'];
+    if (!in_array($ext, $ok))          throw new Exception("Format file tidak didukung. Gunakan JPG, PNG, atau WEBP.");
+    if ($f['size'] > 5 * 1024 * 1024) throw new Exception("Ukuran file maksimal 5MB.");
+    $dir = dirname(__DIR__) . "/assets/img/prestasi/";
+    if (!is_dir($dir)) mkdir($dir, 0755, true);
+    $name = uniqid() . '_' . time() . '.' . $ext;
+    if (!move_uploaded_file($f['tmp_name'], $dir . $name))
+        throw new Exception("Gagal menyimpan file.");
+    return $name;
+}
+function hapusGambarPrestasi($nama) {
+    if (!$nama) return;
+    $path = dirname(__DIR__) . "/assets/img/prestasi/{$nama}";
+    if (file_exists($path)) unlink($path);
+}
+
+// Pastikan kolom gambar ada (migration otomatis)
+try {
+    $db->query("ALTER TABLE prestasi ADD COLUMN IF NOT EXISTS gambar VARCHAR(255) DEFAULT NULL AFTER medali");
+} catch(Exception $e) {}
+
+// --- DELETE ---
+if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
+    $row = $db->prepare("SELECT gambar FROM prestasi WHERE id=?");
+    $row->execute([(int)$_GET['delete']]);
+    $r = $row->fetch();
+    hapusGambarPrestasi($r['gambar'] ?? null);
+    $db->prepare("DELETE FROM prestasi WHERE id=?")->execute([(int)$_GET['delete']]);
+    header('Location: prestasi.php?msg=deleted'); exit;
+}
+
+// --- TOGGLE FEATURED ---
+if (isset($_GET['toggle']) && is_numeric($_GET['toggle'])) {
+    $db->prepare("UPDATE prestasi SET is_featured = IF(is_featured=1,0,1) WHERE id=?")->execute([(int)$_GET['toggle']]);
+    header('Location: prestasi.php'); exit;
+}
+
+// --- SAVE (INSERT/UPDATE) ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    try {
+        $id     = (int)($_POST['id'] ?? 0);
+        $nama   = trim($_POST['nama_prestasi'] ?? '');
+        $desk   = trim($_POST['deskripsi'] ?? '');
+        $tingkat= $_POST['tingkat'] ?? 'Kecamatan';
+        $juara  = trim($_POST['juara'] ?? '');
+        $medali = trim($_POST['medali'] ?? '🏆');
+        $raih   = trim($_POST['raih_oleh'] ?? '');
+        $tahun  = (int)($_POST['tahun'] ?? date('Y'));
+        $kat    = $_POST['kategori'] ?? 'akademik';
+        $feat   = isset($_POST['is_featured']) ? 1 : 0;
+        $urut   = (int)($_POST['urutan'] ?? 0);
+
+        if (!$nama) throw new Exception('Nama prestasi wajib diisi!');
+
+        // Gambar lama
+        $gambarLama = '';
+        if ($id) {
+            $s = $db->prepare("SELECT gambar FROM prestasi WHERE id=?");
+            $s->execute([$id]);
+            $gambarLama = $s->fetchColumn() ?: '';
+        }
+
+        $gambarBaru = uploadGambarPrestasi('gambar');
+        $gambar     = $gambarBaru ?? $gambarLama;
+        if ($gambarBaru && $gambarLama) hapusGambarPrestasi($gambarLama);
+
+        if (isset($_POST['hapus_gambar']) && $_POST['hapus_gambar'] === '1') {
+            hapusGambarPrestasi($gambar);
+            $gambar = '';
+        }
+
+        if ($id) {
+            $db->prepare("UPDATE prestasi SET nama_prestasi=?,deskripsi=?,tingkat=?,juara=?,medali=?,gambar=?,raih_oleh=?,tahun=?,kategori=?,is_featured=?,urutan=? WHERE id=?")
+               ->execute([$nama,$desk,$tingkat,$juara,$medali,$gambar,$raih,$tahun,$kat,$feat,$urut,$id]);
+        } else {
+            $db->prepare("INSERT INTO prestasi (nama_prestasi,deskripsi,tingkat,juara,medali,gambar,raih_oleh,tahun,kategori,is_featured,urutan) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+               ->execute([$nama,$desk,$tingkat,$juara,$medali,$gambar,$raih,$tahun,$kat,$feat,$urut]);
+        }
+        header('Location: prestasi.php?msg=saved'); exit;
+    } catch (Exception $e) {
+        $err = $e->getMessage();
     }
-    header('Location: profil.php?msg=saved'); exit;
 }
 
-// SAVE STRUKTUR
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_struktur'])) {
-    $id      = (int)($_POST['id'] ?? 0);
-    $nama    = trim($_POST['nama'] ?? '');
-    $jabatan = trim($_POST['jabatan'] ?? '');
-    $nip     = trim($_POST['nip'] ?? '');
-    $level   = $_POST['level'] ?? 'staff';
-    $urutan  = (int)($_POST['urutan'] ?? 0);
-    $allowed = ['kepala','komite','wakil','staff','koordinator','guru_kelas','guru_mapel','penunjang','siswa'];
-    if (!in_array($level, $allowed)) $level = 'staff';
-    if ($id) {
-        $db->prepare("UPDATE struktur_organisasi SET nama=?,jabatan=?,nip=?,level=?,urutan=? WHERE id=?")->execute([$nama,$jabatan,$nip,$level,$urutan,$id]);
-    } else {
-        $db->prepare("INSERT INTO struktur_organisasi (nama,jabatan,nip,level,urutan,is_active) VALUES (?,?,?,?,?,1)")->execute([$nama,$jabatan,$nip,$level,$urutan]);
-    }
-    header('Location: profil.php?tab=struktur&msg=saved'); exit;
+// Edit mode
+$edit = null;
+if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
+    $s = $db->prepare("SELECT * FROM prestasi WHERE id=?");
+    $s->execute([(int)$_GET['edit']]);
+    $edit = $s->fetch();
 }
 
-// DELETE STRUKTUR
-if (isset($_GET['del_str']) && is_numeric($_GET['del_str'])) {
-    $db->prepare("DELETE FROM struktur_organisasi WHERE id=?")->execute([(int)$_GET['del_str']]);
-    header('Location: profil.php?tab=struktur&msg=deleted'); exit;
-}
+$showForm = isset($_GET['action']) || $edit;
+$list     = $db->query("SELECT * FROM prestasi ORDER BY is_featured DESC, tahun DESC, urutan ASC")->fetchAll();
 
-$profil   = $db->query("SELECT * FROM profil_sekolah LIMIT 1")->fetch() ?: [];
-$struktur = $db->query("SELECT * FROM struktur_organisasi WHERE is_active=1 ORDER BY urutan")->fetchAll();
-
-$editStr = null;
-if (isset($_GET['edit_str']) && is_numeric($_GET['edit_str'])) {
-    $s = $db->prepare("SELECT * FROM struktur_organisasi WHERE id=?");
-    $s->execute([(int)$_GET['edit_str']]);
-    $editStr = $s->fetch();
-}
-
-$activeTab = $_GET['tab'] ?? 'info';
-if (isset($_GET['msg'])) $msg = $_GET['msg']==='saved' ? '✅ Berhasil disimpan!' : '🗑️ Berhasil dihapus.';
+if (isset($_GET['msg']) && !$msg)
+    $msg = $_GET['msg']==='saved' ? '✅ Data berhasil disimpan!' : '🗑️ Data berhasil dihapus.';
 
 require_once 'layout.php';
 ?>
 
 <?php if ($msg): ?><div class="alert alert-success"><?= $msg ?></div><?php endif; ?>
+<?php if ($err): ?><div class="alert alert-error">⚠️ <?= htmlspecialchars($err) ?></div><?php endif; ?>
 
-<div class="page-tabs">
-  <button class="page-tab <?= $activeTab==='info'?'active':'' ?>" onclick="location='profil.php?tab=info'">🏫 Info Sekolah</button>
-  <button class="page-tab <?= $activeTab==='visi'?'active':'' ?>" onclick="location='profil.php?tab=visi'">🔭 Visi Misi & Tujuan</button>
-  <button class="page-tab <?= $activeTab==='sejarah'?'active':'' ?>" onclick="location='profil.php?tab=sejarah'">📜 Sejarah</button>
-  <button class="page-tab <?= $activeTab==='struktur'?'active':'' ?>" onclick="location='profil.php?tab=struktur'">🏛️ Struktur Organisasi</button>
-  <button class="page-tab <?= $activeTab==='kontak'?'active':'' ?>" onclick="location='profil.php?tab=kontak'">📍 Kontak & Maps</button>
-</div>
-
-<?php if ($activeTab === 'struktur'): ?>
-<!-- TAB STRUKTUR -->
-<div style="display:grid;grid-template-columns:1fr 1.2fr;gap:20px;">
-
-  <div class="card">
-    <div class="card-head"><h2><?= $editStr ? '✏️ Edit Jabatan' : '➕ Tambah Jabatan' ?></h2></div>
-    <div class="card-body">
-      <form method="POST">
-        <input type="hidden" name="save_struktur" value="1"/>
-        <input type="hidden" name="id" value="<?= $editStr['id'] ?? 0 ?>"/>
-        <div class="form-group">
-          <label>Nama + Gelar *</label>
-          <input type="text" name="nama" value="<?= htmlspecialchars($editStr['nama']??'') ?>" required placeholder="Budi Santoso, S.Pd."/>
-        </div>
-        <div class="form-group">
-          <label>Jabatan *</label>
-          <input type="text" name="jabatan" value="<?= htmlspecialchars($editStr['jabatan']??'') ?>" required placeholder="Kepala Sekolah"/>
-        </div>
-        <div class="form-group">
-          <label>NIP (opsional)</label>
-          <input type="text" name="nip" value="<?= htmlspecialchars($editStr['nip']??'') ?>" placeholder="Kosongkan jika tidak ada"/>
-        </div>
-        <div class="form-group">
-          <label>Level / Hierarki</label>
-          <select name="level">
-            <option value="kepala"      <?= ($editStr['level']??'')==='kepala'      ?'selected':'' ?>>👑 Kepala Sekolah</option>
-            <option value="komite"      <?= ($editStr['level']??'')==='komite'      ?'selected':'' ?>>🤝 Komite Sekolah</option>
-            <option value="wakil"       <?= ($editStr['level']??'')==='wakil'       ?'selected':'' ?>>🔑 Wakil Kepala Sekolah</option>
-            <option value="staff"       <?= ($editStr['level']??'staff')==='staff'  ?'selected':'' ?>>💼 Staff Admin (TU/Bendahara/Operator)</option>
-            <option value="koordinator" <?= ($editStr['level']??'')==='koordinator' ?'selected':'' ?>>📋 Koordinator</option>
-            <option value="guru_kelas"  <?= ($editStr['level']??'')==='guru_kelas'  ?'selected':'' ?>>📚 Guru Kelas</option>
-            <option value="guru_mapel"  <?= ($editStr['level']??'')==='guru_mapel'  ?'selected':'' ?>>🎓 Guru Mata Pelajaran</option>
-            <option value="penunjang"   <?= ($editStr['level']??'')==='penunjang'   ?'selected':'' ?>>🛠️ Tenaga Penunjang (Perpus/UKS/Kebersihan)</option>
-            <option value="siswa"       <?= ($editStr['level']??'')==='siswa'       ?'selected':'' ?>>🎒 Siswa</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Urutan Tampil</label>
-          <input type="number" name="urutan" value="<?= $editStr['urutan']??0 ?>" min="0"/>
-        </div>
-        <div style="display:flex;gap:8px;">
-          <?php if ($editStr): ?><a href="profil.php?tab=struktur" class="btn btn-outline">Batal</a><?php endif; ?>
-          <button type="submit" class="btn btn-primary">💾 Simpan</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-head"><h2>Daftar Struktur Organisasi</h2></div>
-    <?php
-    $levelLabel = [
-      'kepala'      => ['👑 Kepala Sekolah',     '#fdecea','#B71C1C'],
-      'komite'      => ['🤝 Komite',              '#fffbeb','#92400e'],
-      'wakil'       => ['🔑 Wakil Kepala',        '#fef2f2','#991b1b'],
-      'staff'       => ['💼 Staff Admin',          '#eff6ff','#1d4ed8'],
-      'koordinator' => ['📋 Koordinator',          '#ecfdf5','#065f46'],
-      'guru_kelas'  => ['📚 Guru Kelas',           '#f5f3ff','#4c1d95'],
-      'guru_mapel'  => ['🎓 Guru Mapel',           '#fff7ed','#9a3412'],
-      'penunjang'   => ['🛠️ Penunjang',            '#f9fafb','#374151'],
-      'siswa'       => ['🎒 Siswa',                '#f1f5f9','#1e293b'],
-    ];
-    ?>
-    <?php if ($struktur): ?>
-    <table class="data-table">
-      <thead><tr><th>#</th><th>Nama</th><th>Jabatan</th><th>Level</th><th style="width:80px">Urutan</th><th>Aksi</th></tr></thead>
-      <tbody>
-        <?php foreach ($struktur as $i => $s):
-          $lv = $levelLabel[$s['level']] ?? ['🔹 '.$s['level'],'#f3f4f6','#374151'];
-        ?>
-        <tr>
-          <td style="color:#9ca3af;font-size:12px"><?= $i+1 ?></td>
-          <td style="font-weight:600"><?= htmlspecialchars($s['nama']) ?></td>
-          <td style="color:#6b7280"><?= htmlspecialchars($s['jabatan']) ?></td>
-          <td>
-            <span style="background:<?= $lv[1] ?>;color:<?= $lv[2] ?>;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap">
-              <?= $lv[0] ?>
-            </span>
-          </td>
-          <td style="text-align:center;color:#9ca3af"><?= $s['urutan'] ?></td>
-          <td>
-            <div class="td-actions">
-              <a href="profil.php?tab=struktur&edit_str=<?= $s['id'] ?>" class="btn btn-outline btn-sm">✏️ Edit</a>
-              <a href="profil.php?del_str=<?= $s['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Hapus <?= htmlspecialchars(addslashes($s['nama'])) ?>?')">🗑️</a>
-            </div>
-          </td>
-        </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-    <?php else: ?>
-    <div class="empty-state"><div>🏛️</div><p>Belum ada data struktur organisasi.</p></div>
-    <?php endif; ?>
+<!-- Tabs -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+  <div class="page-tabs">
+    <button class="page-tab <?= !$showForm?'active':'' ?>" onclick="location='prestasi.php'">🏆 Daftar Prestasi</button>
+    <button class="page-tab <?= $showForm?'active':'' ?>" onclick="location='prestasi.php?action=new'"><?= $edit?'✏️ Edit':'➕ Tambah Baru' ?></button>
   </div>
 </div>
 
-<?php else: ?>
+<?php if ($showForm): ?>
+<!-- FORM -->
 <div class="card">
-  <div class="card-head"><h2>Edit <?= ['info'=>'Informasi Sekolah','visi'=>'Visi, Misi & Tujuan','sejarah'=>'Sejarah Sekolah','kontak'=>'Kontak & Lokasi'][$activeTab] ?? '' ?></h2></div>
+  <div class="card-head">
+    <h2><?= $edit ? '✏️ Edit Prestasi' : '➕ Tambah Prestasi' ?></h2>
+    <a href="prestasi.php" class="btn btn-outline btn-sm">← Kembali</a>
+  </div>
   <div class="card-body">
-    <form method="POST">
-      <input type="hidden" name="save_profil" value="1"/>
-      <!-- Hidden fields untuk field lain yang tidak ditampilkan di tab ini -->
-      <?php foreach (['nama_sekolah','npsn','nss','akreditasi','tahun_berdiri','alamat','kelurahan','kecamatan','kabupaten_kota','provinsi','kode_pos','telepon','email','website','total_siswa','total_guru','total_kelas','jam_operasional','maps_embed','visi','misi','tujuan','sejarah'] as $f): ?>
-        <?php if (!in_array($f, ['nama_sekolah','npsn','nss','akreditasi','tahun_berdiri','alamat','kelurahan','kecamatan','kabupaten_kota','provinsi','kode_pos','telepon','email','website','total_siswa','total_guru','total_kelas'])
-               || $activeTab !== 'info'): ?>
-          <?php if (!in_array($f, ['visi','misi','tujuan']) || $activeTab !== 'visi'): ?>
-            <?php if ($f !== 'sejarah' || $activeTab !== 'sejarah'): ?>
-              <?php if (!in_array($f, ['alamat','kode_pos','telepon','email','website','maps_embed','jam_operasional']) || $activeTab !== 'kontak'): ?>
-                <input type="hidden" name="<?= $f ?>" value="<?= htmlspecialchars($profil[$f]??'') ?>"/>
-              <?php endif; ?>
-            <?php endif; ?>
-          <?php endif; ?>
-        <?php endif; ?>
-      <?php endforeach; ?>
-
-      <?php if ($activeTab === 'info'): ?>
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="id" value="<?= $edit['id'] ?? 0 ?>"/>
       <div class="form-row">
+
         <div class="form-group full">
-          <label>Nama Sekolah *</label>
-          <input type="text" name="nama_sekolah" value="<?= htmlspecialchars($profil['nama_sekolah']??'SDN Ketapang') ?>" required/>
+          <label>Nama Prestasi *</label>
+          <input type="text" name="nama_prestasi" value="<?= htmlspecialchars($edit['nama_prestasi']??'') ?>"
+                 placeholder="Contoh: Juara I Olimpiade Matematika" required/>
         </div>
-        <div class="form-group"><label>NPSN</label><input type="text" name="npsn" value="<?= htmlspecialchars($profil['npsn']??'') ?>" placeholder="8 digit"/></div>
-        <div class="form-group"><label>NSS</label><input type="text" name="nss" value="<?= htmlspecialchars($profil['nss']??'') ?>"/></div>
+
+        <!-- UPLOAD GAMBAR -->
+        <div class="form-group full">
+          <label>🖼️ Foto / Piagam Prestasi</label>
+          <?php if (!empty($edit['gambar'])): ?>
+          <div style="margin-bottom:12px;">
+            <img src="../assets/img/prestasi/<?= htmlspecialchars($edit['gambar']) ?>"
+                 style="width:100%;max-height:200px;object-fit:cover;border-radius:10px;border:1px solid #eee;display:block;"/>
+            <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" name="hapus_gambar" value="1" id="hapusGambar"/>
+              <label for="hapusGambar" style="font-size:12px;color:#c62828;cursor:pointer;font-weight:500;">🗑️ Hapus gambar ini</label>
+            </div>
+            <div style="font-size:12px;color:#999;margin-top:4px;">Upload baru untuk mengganti.</div>
+          </div>
+          <?php endif; ?>
+          <div class="upload-zone" onclick="document.getElementById('gambarPrestasiInput').click()"
+               ondragover="event.preventDefault();this.classList.add('drag')"
+               ondragleave="this.classList.remove('drag')"
+               ondrop="handleDropPrestasi(event)">
+            <div id="prevPrestasi" style="text-align:center;">
+              <div style="font-size:36px;margin-bottom:8px;">🏆</div>
+              <div style="font-size:13px;font-weight:600;color:#555;">Klik atau drag foto piagam/trofi ke sini</div>
+              <div style="font-size:11px;color:#999;margin-top:4px;">JPG, PNG, WEBP · Maks 5MB</div>
+            </div>
+          </div>
+          <input type="file" id="gambarPrestasiInput" name="gambar"
+                 accept="image/jpeg,image/png,image/webp,image/gif"
+                 style="display:none" onchange="previewPrestasi(this)"/>
+        </div>
+
         <div class="form-group">
-          <label>Akreditasi</label>
-          <select name="akreditasi">
-            <?php foreach (['A','B','C','Belum'] as $a): ?>
-            <option value="<?= $a ?>" <?= ($profil['akreditasi']??'A')===$a?'selected':'' ?>><?= $a ?></option>
+          <label>Tingkat</label>
+          <select name="tingkat">
+            <?php foreach (['Kecamatan','Kabupaten/Kota','Provinsi','Nasional','Internasional'] as $t): ?>
+            <option value="<?= $t ?>" <?= ($edit['tingkat']??'')===$t?'selected':'' ?>><?= $t ?></option>
             <?php endforeach; ?>
           </select>
         </div>
-        <div class="form-group"><label>Tahun Berdiri</label><input type="number" name="tahun_berdiri" value="<?= $profil['tahun_berdiri']??'' ?>" placeholder="1975" min="1900" max="2099"/></div>
-        <div class="form-group"><label>Total Siswa</label><input type="number" name="total_siswa" value="<?= $profil['total_siswa']??0 ?>"/></div>
-        <div class="form-group"><label>Total Guru & Staf</label><input type="number" name="total_guru" value="<?= $profil['total_guru']??0 ?>"/></div>
-        <div class="form-group"><label>Total Kelas</label><input type="number" name="total_kelas" value="<?= $profil['total_kelas']??0 ?>"/></div>
-        <div class="form-group full"><label>Jam Operasional</label><input type="text" name="jam_operasional" value="<?= htmlspecialchars($profil['jam_operasional']??'') ?>" placeholder="Senin–Jumat: 07.00–13.30 WIB"/></div>
-      </div>
-
-      <?php elseif ($activeTab === 'visi'): ?>
-      <div class="form-group">
-        <label>Visi Sekolah</label>
-        <textarea name="visi" rows="4" placeholder="Tulis visi sekolah..."><?= htmlspecialchars($profil['visi']??'') ?></textarea>
-      </div>
-      <div class="form-group">
-        <label>Misi Sekolah <span style="color:#999;font-weight:400">(gunakan baris baru untuk tiap poin)</span></label>
-        <textarea name="misi" rows="7" placeholder="Tulis misi 1&#10;Tulis misi 2&#10;Tulis misi 3"><?= htmlspecialchars($profil['misi']??'') ?></textarea>
-      </div>
-      <div class="form-group">
-        <label>Tujuan Sekolah <span style="color:#999;font-weight:400">(gunakan baris baru untuk tiap poin)</span></label>
-        <textarea name="tujuan" rows="5" placeholder="Tulis tujuan 1&#10;Tulis tujuan 2"><?= htmlspecialchars($profil['tujuan']??'') ?></textarea>
-      </div>
-
-      <?php elseif ($activeTab === 'sejarah'): ?>
-      <div class="form-group">
-        <label>Sejarah Sekolah</label>
-        <textarea name="sejarah" rows="12" placeholder="Tulis sejarah lengkap sekolah di sini..."><?= htmlspecialchars($profil['sejarah']??'') ?></textarea>
-        <div class="form-hint">Gunakan paragraf biasa. Teks ini akan ditampilkan di halaman profil sekolah.</div>
-      </div>
-
-      <?php elseif ($activeTab === 'kontak'): ?>
-      <div class="form-row">
-        <div class="form-group full"><label>Alamat Lengkap</label><input type="text" name="alamat" value="<?= htmlspecialchars($profil['alamat']??'') ?>"/></div>
-        <div class="form-group"><label>Kelurahan/Desa</label><input type="text" name="kelurahan" value="<?= htmlspecialchars($profil['kelurahan']??'') ?>"/></div>
-        <div class="form-group"><label>Kecamatan</label><input type="text" name="kecamatan" value="<?= htmlspecialchars($profil['kecamatan']??'') ?>"/></div>
-        <div class="form-group"><label>Kabupaten/Kota</label><input type="text" name="kabupaten_kota" value="<?= htmlspecialchars($profil['kabupaten_kota']??'') ?>"/></div>
-        <div class="form-group"><label>Provinsi</label><input type="text" name="provinsi" value="<?= htmlspecialchars($profil['provinsi']??'') ?>"/></div>
-        <div class="form-group"><label>Kode Pos</label><input type="text" name="kode_pos" value="<?= htmlspecialchars($profil['kode_pos']??'') ?>"/></div>
-        <div class="form-group"><label>Nomor Telepon</label><input type="text" name="telepon" value="<?= htmlspecialchars($profil['telepon']??'') ?>"/></div>
-        <div class="form-group"><label>Email Resmi</label><input type="email" name="email" value="<?= htmlspecialchars($profil['email']??'') ?>"/></div>
-        <div class="form-group full"><label>Website</label><input type="url" name="website" value="<?= htmlspecialchars($profil['website']??'') ?>" placeholder="https://sdnketapang.sch.id"/></div>
+        <div class="form-group">
+          <label>Juara / Peringkat</label>
+          <input type="text" name="juara" value="<?= htmlspecialchars($edit['juara']??'') ?>"
+                 placeholder="Contoh: Juara I"/>
+        </div>
+        <div class="form-group">
+          <label>Tahun</label>
+          <input type="number" name="tahun" value="<?= $edit['tahun']??date('Y') ?>" min="2000" max="<?= date('Y')+1 ?>"/>
+        </div>
+        <div class="form-group">
+          <label>Kategori</label>
+          <select name="kategori">
+            <?php foreach (['akademik'=>'📚 Akademik','olahraga'=>'⚽ Olahraga','seni'=>'🎨 Seni','agama'=>'🕌 Agama','pramuka'=>'⚜️ Pramuka','lainnya'=>'🌟 Lainnya'] as $v=>$l): ?>
+            <option value="<?= $v ?>" <?= ($edit['kategori']??'')===$v?'selected':'' ?>><?= $l ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Medali/Ikon</label>
+          <input type="text" name="medali" value="<?= htmlspecialchars($edit['medali']??'🏆') ?>" maxlength="5"
+                 style="text-align:center;font-size:22px;width:70px;"/>
+          <div class="form-hint">Gunakan emoji: 🥇 🥈 🥉 🏆 ⭐ 🎖️</div>
+        </div>
+        <div class="form-group">
+          <label>Diraih Oleh</label>
+          <input type="text" name="raih_oleh" value="<?= htmlspecialchars($edit['raih_oleh']??'') ?>"
+                 placeholder="Nama siswa / tim"/>
+        </div>
         <div class="form-group full">
-          <label>Google Maps Embed Code</label>
-          <textarea name="maps_embed" rows="4" placeholder='Paste kode iframe dari Google Maps di sini...\n<iframe src="https://www.google.com/maps/embed?pb=..." ...></iframe>'><?= htmlspecialchars($profil['maps_embed']??'') ?></textarea>
-          <div class="form-hint">📌 Cara: Google Maps → cari sekolah → Bagikan → Sematkan peta → Salin kode iframe</div>
+          <label>Deskripsi</label>
+          <textarea name="deskripsi" rows="3" placeholder="Keterangan singkat pencapaian..."><?= htmlspecialchars($edit['deskripsi']??'') ?></textarea>
+        </div>
+        <div class="form-group">
+          <label>Urutan Tampil</label>
+          <input type="number" name="urutan" value="<?= $edit['urutan']??count($list)+1 ?>" min="0"/>
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:10px;padding-top:22px;">
+          <input type="checkbox" name="is_featured" value="1" id="isFeatured" <?= ($edit['is_featured']??0)?'checked':'' ?> style="width:18px;height:18px;accent-color:var(--red);"/>
+          <label for="isFeatured" style="font-size:13px;font-weight:600;cursor:pointer;">⭐ Tampilkan sebagai Unggulan</label>
         </div>
       </div>
-      <?php endif; ?>
-
-      <div style="display:flex;justify-content:flex-end;margin-top:8px;">
-        <button type="submit" class="btn btn-primary">💾 Simpan Perubahan</button>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+        <a href="prestasi.php" class="btn btn-outline">Batal</a>
+        <button type="submit" class="btn btn-primary">💾 Simpan</button>
       </div>
     </form>
   </div>
 </div>
+
+<?php else: ?>
+<!-- DAFTAR PRESTASI -->
+<div class="card">
+  <div class="card-head">
+    <h2>Daftar Prestasi <span style="color:#999;font-size:13px;font-weight:400">(<?= count($list) ?> prestasi)</span></h2>
+  </div>
+  <?php if ($list): ?>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th style="width:80px">Foto</th>
+        <th style="width:36%">Prestasi</th>
+        <th>Tingkat</th>
+        <th>Tahun</th>
+        <th>Diraih Oleh</th>
+        <th style="width:80px">Unggulan</th>
+        <th>Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+      <?php foreach ($list as $p): ?>
+      <tr>
+        <td>
+          <?php if (!empty($p['gambar'])): ?>
+            <img src="../assets/img/prestasi/<?= htmlspecialchars($p['gambar']) ?>"
+                 style="width:64px;height:48px;object-fit:cover;border-radius:8px;display:block;"/>
+          <?php else: ?>
+            <div style="width:64px;height:48px;background:#fffde7;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:26px;">
+              <?= $p['medali'] ?: '🏆' ?>
+            </div>
+          <?php endif; ?>
+        </td>
+        <td>
+          <div style="font-weight:600"><?= htmlspecialchars($p['nama_prestasi']) ?></div>
+          <div style="font-size:12px;color:#999;margin-top:2px"><?= htmlspecialchars($p['juara'] ?? '') ?></div>
+        </td>
+        <td><span class="badge badge-kegiatan">Tk. <?= htmlspecialchars($p['tingkat']) ?></span></td>
+        <td style="font-weight:600"><?= $p['tahun'] ?></td>
+        <td style="font-size:12px;color:#555"><?= $p['raih_oleh'] ? htmlspecialchars($p['raih_oleh']) : '<span style="color:#ccc">—</span>' ?></td>
+        <td style="text-align:center">
+          <a href="prestasi.php?toggle=<?= $p['id'] ?>" title="Toggle unggulan">
+            <?= $p['is_featured'] ? '<span style="font-size:18px">⭐</span>' : '<span style="font-size:18px;opacity:.25">☆</span>' ?>
+          </a>
+        </td>
+        <td>
+          <div class="td-actions">
+            <a href="prestasi.php?edit=<?= $p['id'] ?>" class="btn btn-outline btn-sm">✏️</a>
+            <a href="prestasi.php?delete=<?= $p['id'] ?>" class="btn btn-danger btn-sm"
+               onclick="return confirm('Hapus prestasi ini? Gambar juga akan dihapus.')">🗑️</a>
+          </div>
+        </td>
+      </tr>
+      <?php endforeach; ?>
+    </tbody>
+  </table>
+  <?php else: ?>
+  <div class="empty-state"><div>🏆</div><p>Belum ada prestasi. <a href="prestasi.php?action=new" style="color:var(--red)">Tambah prestasi pertama →</a></p></div>
+  <?php endif; ?>
+</div>
 <?php endif; ?>
+
+<style>
+.upload-zone{border:2px dashed #ddd;border-radius:12px;padding:28px 16px;cursor:pointer;transition:all .2s;background:#fafafa;}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--red);background:#fff5f5;}
+</style>
+<script>
+function previewPrestasi(input) {
+  const target = document.getElementById('prevPrestasi');
+  if (!input.files || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    target.innerHTML = `
+      <img src="${e.target.result}" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;display:block;"/>
+      <div style="font-size:11px;color:#888;margin-top:6px;text-align:center;">${input.files[0].name} (${(input.files[0].size/1024).toFixed(0)} KB)</div>`;
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+function handleDropPrestasi(event) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('drag');
+  const file = event.dataTransfer.files[0];
+  if (!file) return;
+  const input = document.getElementById('gambarPrestasiInput');
+  const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
+  previewPrestasi(input);
+}
+</script>
 
 <?php require_once 'layout_end.php'; ?>
