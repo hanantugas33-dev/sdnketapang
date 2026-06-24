@@ -1,414 +1,294 @@
+<?php
+// layout.php — dipanggil oleh setiap halaman admin
+// $pageTitle dan $pageActive harus di-set sebelum include ini
+$pageTitle  = $pageTitle  ?? 'Admin';
+$pageActive = $pageActive ?? '';
+?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-<meta name="theme-color" content="#B71C1C"/>
-<meta name="mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="format-detection" content="telephone=no"/>
-<title>SDN Ketapang — Sekolah Dasar Negeri Ketapang</title>
-<meta name="description" content="Website resmi SDN Ketapang - Sekolah Dasar Negeri Ketapang. Informasi profil, berita, guru, galeri, dan pendaftaran siswa baru."/>
-<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,600;0,700;1,500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="assets/css/style.css"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title><?= htmlspecialchars($pageTitle) ?> — Admin SDN Ketapang</title>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --red:#B71C1C;--red2:#D32F2F;--gold:#C8981F;
+  --dark:#111418;--dark2:#1C2128;--dark3:#252B34;
+  --sidebar-w:240px;
+  --white:#F8F6F1;--cream:#F2EDE4;--muted:#6B7280;
+  --green:#1B5E20;
+  --radius:12px;--shadow:0 4px 20px rgba(0,0,0,.08);
+}
+html,body{height:100%;font-family:'DM Sans',sans-serif;background:#F4F5F7;color:#1a1a2e;}
+a{text-decoration:none;color:inherit;}
+img{max-width:100%;}
+button{cursor:pointer;}
+
+/* LAYOUT */
+.admin-wrap{display:flex;min-height:100vh;}
+
+/* SIDEBAR */
+.sidebar{
+  width:var(--sidebar-w);flex-shrink:0;
+  background:var(--dark2);
+  display:flex;flex-direction:column;
+  position:fixed;top:0;left:0;bottom:0;
+  z-index:100;overflow-y:auto;
+}
+.sidebar-brand{
+  padding:24px 20px 20px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+.brand-logo{
+  width:42px;height:42px;background:var(--red);
+  border-radius:10px;display:inline-flex;align-items:center;
+  justify-content:center;color:white;font-weight:700;font-size:11px;
+  text-align:center;line-height:1.3;margin-bottom:10px;
+}
+.brand-name{font-family:'Lora',serif;font-size:15px;color:white;font-weight:700;}
+.brand-sub{font-size:11px;color:rgba(255,255,255,.35);margin-top:2px;}
+
+.sidebar-nav{padding:16px 12px;flex:1;}
+.nav-section{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.25);padding:0 8px;margin:16px 0 8px;}
+.nav-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-radius:9px;
+  font-size:13px;font-weight:500;color:rgba(255,255,255,.55);
+  transition:all .2s;margin-bottom:2px;
+}
+.nav-item:hover{background:rgba(255,255,255,.06);color:white;}
+.nav-item.active{background:var(--red);color:white;}
+.nav-item .nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0;}
+.sidebar-footer{
+  padding:16px 12px;
+  border-top:1px solid rgba(255,255,255,.06);
+}
+.logout-btn{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border-radius:9px;
+  font-size:13px;font-weight:500;color:rgba(255,255,255,.4);
+  background:none;border:none;width:100%;
+  transition:all .2s;
+}
+.logout-btn:hover{background:rgba(183,28,28,.2);color:#EF9A9A;}
+
+/* MAIN */
+.main-content{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh;}
+
+/* TOPBAR */
+.admin-topbar{
+  background:white;border-bottom:1px solid #eee;
+  padding:0 32px;height:60px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:50;
+}
+.topbar-left h1{font-family:'Lora',serif;font-size:18px;color:var(--dark);font-weight:700;}
+.topbar-left p{font-size:12px;color:var(--muted);}
+.topbar-right{display:flex;align-items:center;gap:12px;}
+.view-site-btn{
+  display:flex;align-items:center;gap:6px;
+  padding:7px 14px;border-radius:8px;
+  background:var(--cream);color:var(--dark);
+  font-size:12px;font-weight:600;border:none;
+  transition:.2s;
+}
+.view-site-btn:hover{background:#e0d9cf;}
+.admin-badge{
+  background:var(--red);color:white;
+  padding:5px 12px;border-radius:20px;
+  font-size:11px;font-weight:600;
+}
+
+/* PAGE CONTENT */
+.page-body{padding:28px 32px;flex:1;}
+
+/* CARDS */
+.card{background:white;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;}
+.card-head{
+  padding:18px 24px;border-bottom:1px solid #f0f0f0;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.card-head h2{font-family:'Lora',serif;font-size:16px;font-weight:700;color:var(--dark);}
+.card-body{padding:24px;}
+
+/* BUTTONS */
+.btn{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;border:none;transition:.2s;display:inline-flex;align-items:center;gap:6px;font-family:'DM Sans',sans-serif;}
+.btn-primary{background:var(--red2);color:white;}
+.btn-primary:hover{background:#c62828;}
+.btn-success{background:#2E7D32;color:white;}
+.btn-success:hover{background:#1B5E20;}
+.btn-outline{background:white;color:var(--dark);border:1px solid #ddd;}
+.btn-outline:hover{border-color:var(--red);color:var(--red);}
+.btn-danger{background:#fff;color:#c62828;border:1px solid #ffcdd2;}
+.btn-danger:hover{background:#ffebee;}
+.btn-sm{padding:6px 12px;font-size:12px;}
+.btn-gold{background:var(--gold);color:white;}
+.btn-gold:hover{background:#a37a15;}
+
+/* FORMS */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+.form-group{margin-bottom:18px;}
+.form-group label{display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:6px;}
+.form-group input,.form-group select,.form-group textarea{
+  width:100%;padding:10px 14px;
+  border:1px solid #ddd;border-radius:8px;
+  font-size:14px;font-family:'DM Sans',sans-serif;
+  color:var(--dark);background:white;
+  outline:none;transition:.2s;
+}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--red);}
+.form-group textarea{resize:vertical;min-height:100px;}
+.form-group.full{grid-column:1/-1;}
+.form-hint{font-size:11px;color:var(--muted);margin-top:4px;}
+
+/* TABLE */
+.data-table{width:100%;border-collapse:collapse;}
+.data-table th{font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);padding:10px 16px;text-align:left;border-bottom:2px solid #f0f0f0;}
+.data-table td{padding:12px 16px;border-bottom:1px solid #f8f8f8;font-size:13px;vertical-align:middle;}
+.data-table tr:last-child td{border-bottom:none;}
+.data-table tr:hover td{background:#fafafa;}
+.td-actions{display:flex;gap:6px;}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
+.badge-berita{background:#FFF3E0;color:#E65100;}
+.badge-pengumuman{background:#E8F5E9;color:#1B5E20;}
+.badge-kegiatan{background:#E3F2FD;color:#0D47A1;}
+.badge-publish{background:#E8F5E9;color:#1B5E20;}
+.badge-draft{background:#f5f5f5;color:#999;}
+.badge-aktif{background:#E8F5E9;color:#1B5E20;}
+.badge-nonaktif{background:#f5f5f5;color:#999;}
+
+/* AVATAR */
+.avatar{width:36px;height:36px;border-radius:8px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden;}
+.avatar img{width:100%;height:100%;object-fit:cover;}
+
+/* ALERTS */
+.alert{padding:12px 18px;border-radius:8px;font-size:13px;margin-bottom:20px;}
+.alert-success{background:#E8F5E9;border:1px solid #C8E6C9;color:#1B5E20;}
+.alert-error{background:#FFEBEE;border:1px solid #FFCDD2;color:#c62828;}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.open{display:flex;}
+.modal{background:white;border-radius:16px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;}
+.modal-head{padding:20px 24px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;}
+.modal-head h3{font-family:'Lora',serif;font-size:17px;}
+.modal-close{background:none;border:none;font-size:18px;color:#999;cursor:pointer;padding:4px;}
+.modal-close:hover{color:var(--red);}
+.modal-body{padding:24px;}
+.modal-footer{padding:16px 24px;border-top:1px solid #eee;display:flex;justify-content:flex-end;gap:10px;}
+
+/* STATS GRID */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px;}
+.stat-box{background:white;border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);border-left:4px solid var(--red);}
+.stat-box.gold{border-color:var(--gold);}
+.stat-box.green{border-color:var(--green);}
+.stat-box.blue{border-color:#1565C0;}
+.stat-num{font-family:'Lora',serif;font-size:28px;font-weight:700;color:var(--dark);}
+.stat-lbl{font-size:12px;color:var(--muted);margin-top:2px;}
+
+/* TABS */
+.page-tabs{display:flex;gap:4px;margin-bottom:24px;background:white;padding:6px;border-radius:10px;box-shadow:var(--shadow);width:fit-content;}
+.page-tab{padding:8px 18px;border-radius:7px;font-size:13px;font-weight:600;border:none;background:none;color:var(--muted);transition:.2s;}
+.page-tab.active{background:var(--red);color:white;}
+.page-tab:hover:not(.active){background:#f5f5f5;}
+
+/* PHOTO UPLOAD */
+.photo-upload{border:2px dashed #ddd;border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:.2s;}
+.photo-upload:hover{border-color:var(--red);background:#fff5f5;}
+.photo-upload input{display:none;}
+.photo-preview{width:100px;height:100px;border-radius:10px;object-fit:cover;margin:0 auto 8px;display:block;}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%);transition:.3s;}
+  .sidebar.open{transform:translateX(0);}
+  .main-content{margin-left:0;}
+  .stats-grid{grid-template-columns:1fr 1fr;}
+  .form-row{grid-template-columns:1fr;}
+}
+
+/* LOADING */
+.spinner{width:20px;height:20px;border:2px solid #f3f3f3;border-top:2px solid var(--red);border-radius:50%;animation:spin .6s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.btn-loading{display:flex;align-items:center;gap:8px;}
+
+/* EMPTY STATE */
+.empty-state{text-align:center;padding:48px;color:var(--muted);}
+.empty-state div{font-size:40px;margin-bottom:12px;}
+.empty-state p{font-size:14px;}
+</style>
 </head>
 <body>
+<div class="admin-wrap">
 
-<!-- TOPBAR -->
-<div id="topbar">
-  <span>📍 Jl. Raya Ketapang RT 05/05, Ketapang, Cipondoh, Tangerang,Banten</span>
-  <div class="tb-right">
-    <span>📞 082211617039</span>
-    <span>✉️ sdnketapan9@gmail.com</span>
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-logo">SDN<br>KTP</div>
+    <div class="brand-name">SDN Ketapang</div>
+    <div class="brand-sub">Panel Admin</div>
   </div>
-</div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">Dashboard</div>
+    <a href="index.php" class="nav-item <?= $pageActive==='dashboard'?'active':'' ?>">
+      <span class="nav-icon">🏠</span> Dashboard
+    </a>
+    <div class="nav-section">Konten</div>
+    <a href="berita.php" class="nav-item <?= $pageActive==='berita'?'active':'' ?>">
+      <span class="nav-icon">📰</span> Berita & Pengumuman
+    </a>
+    <a href="galeri.php" class="nav-item <?= $pageActive==='galeri'?'active':'' ?>">
+      <span class="nav-icon">🖼️</span> Galeri Foto
+    </a>
+    <div class="nav-section">Sekolah</div>
+    <a href="profil.php" class="nav-item <?= $pageActive==='profil'?'active':'' ?>">
+      <span class="nav-icon">🏫</span> Profil Sekolah
+    </a>
+    <a href="guru.php" class="nav-item <?= $pageActive==='guru'?'active':'' ?>">
+      <span class="nav-icon">👨‍🏫</span> Guru & Staf
+    </a>
+    <a href="fasilitas.php" class="nav-item <?= $pageActive==='fasilitas'?'active':'' ?>">
+      <span class="nav-icon">🏛️</span> Fasilitas & Ekskul
+    </a>
+    <a href="prestasi.php" class="nav-item <?= $pageActive==='prestasi'?'active':'' ?>">
+      <span class="nav-icon">🏆</span> Prestasi Sekolah
+    </a>
+    <a href="siswa.php" class="nav-item <?= $pageActive==='siswa'?'active':'' ?>">
+      <span class="nav-icon">🎒</span> Data Siswa
+    </a>
+    <div class="nav-section">Pesan</div>
+    <a href="buku_tamu.php" class="nav-item <?= $pageActive==='buku_tamu'?'active':'' ?>">
+      <span class="nav-icon">✉️</span> Buku Tamu
+      <?php
+      // Tampilkan badge unread
+      try {
+        $db = getDB();
+        $unread = $db->query("SELECT COUNT(*) FROM buku_tamu WHERE status='belum_dibaca'")->fetchColumn();
+        if ($unread > 0) echo "<span style='background:var(--gold);color:white;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:auto'>$unread</span>";
+      } catch(Exception $e) {}
+      ?>
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <form method="POST" action="logout.php">
+      <button type="submit" class="logout-btn">
+        <span class="nav-icon">🚪</span> Keluar
+      </button>
+    </form>
+  </div>
+</aside>
 
-<!-- NAVBAR -->
-<nav id="navbar">
-  <div class="nav-brand">
-    <div class="nav-name">
-      SDN Ketapang
-      <small>Sekolah Dasar Negeri</small>
+<!-- MAIN -->
+<div class="main-content">
+  <header class="admin-topbar">
+    <div class="topbar-left">
+      <h1><?= htmlspecialchars($pageTitle) ?></h1>
     </div>
-  </div>
-  <ul class="nav-menu" id="navMenu">
-    <li><a href="#berita" class="nav-link">Berita</a></li>
-    <li><a href="#profil" class="nav-link">Profil</a></li>
-    <li><a href="#guru" class="nav-link">Guru</a></li>
-    <li><a href="#galeri" class="nav-link">Galeri</a></li>
-    <li><a href="#fasilitas" class="nav-link">Fasilitas</a></li>
-    <li><a href="#prestasi" class="nav-link">Prestasi</a></li>
-    <li><a href="#buku-tamu" class="nav-link">Kontak</a></li>
-  </ul>
-  <button class="nav-cta" onclick="scrollToSection('#buku-tamu')">Hubungi Kami</button>
-  <button class="hamburger" id="hamburger" onclick="toggleMenu()">
-    <span></span><span></span><span></span>
-  </button>
-</nav>
-
-<!-- HERO — background foto sekolah -->
-<!-- HERO -->
-<section id="hero">
-
-  <div class="hero-bg-school">
-  <img src="assets/foto.jpg" alt="Foto Sekolah">
-</div>
-
-<div class="hero-overlay"></div>
-
-  <div class="hero-grid container">
-    <div class="hero-text">
-
-      <h1>
-        Selamat Datang di<br>
-        <em>SDN Ketapang</em>
-      </h1>
-    <div class="hero-badge">⭐ Akreditasi A | Berdiri Sejak 1975</div>
-
-      <p>
-        Membentuk generasi cerdas, berkarakter, dan berprestasi.
-        Bersama kami, setiap anak berkembang menjadi pribadi yang
-        unggul dan berakhlak mulia.
-      </p>
-
-      <div class="hero-btns">
-        <a href="#profil" class="btn-primary">Tentang Sekolah</a>
-        <a href="#buku-tamu" class="btn-outline">Hubungi Kami</a>
-      </div>
+    <div class="topbar-right">
+      <a href="../index.html" target="_blank" class="view-site-btn">🌐 Lihat Website</a>
+      <div class="admin-badge">👤 <?= htmlspecialchars($_SESSION['admin_user'] ?? 'Admin') ?></div>
     </div>
-
-  </div>
-
-</section>
-
-<!-- PEMBIASAAN SISWA -->
-<section id="pembiasaan" class="section">
-  <div class="container">
-    <div class="sec-tag">Program Harian</div>
-    <h2 class="sec-title">Pembiasaan<br>Siswa</h2>
-    <div class="bar"></div>
-    <p class="sec-desc">Kegiatan rutin pembiasaan akhlak mulia dan kedisiplinan yang dilaksanakan setiap hari sekolah.</p>
-    <div class="pembiasaan-grid">
-      <div class="pb-card">
-        <div class="pb-icon">🕌</div>
-        <div class="pb-content">
-          <div class="pb-time">07.45 – 07.15 WIB</div>
-          <h4>Sholat Dhuha Berjamaah</h4>
-          <p>Dilaksanakan setiap hari Senin – Jumat sebelum kegiatan belajar dimulai di Musholla sekolah. Dipimpin bergiliran oleh guru agama dan wali kelas.</p>
-        </div>
-      </div>
-      <div class="pb-card">
-        <div class="pb-icon">📖</div>
-        <div class="pb-content">
-          <div class="pb-time">07.00 – 07.15 WIB</div>
-          <h4>Tadarus Al-Qur'an</h4>
-          <p>Membaca Al-Qur'an bersama selama 15 menit setiap pagi sebagai pembiasaan cinta terhadap kitab suci sebelum memulai pelajaran.</p>
-        </div>
-      </div>
-      <div class="pb-card">
-        <div class="pb-icon">🏫</div>
-        <div class="pb-content">
-          <div class="pb-time">Setiap Senin</div>
-          <h4>Upacara Bendera</h4>
-          <p>Upacara rutin setiap Senin pagi untuk menumbuhkan rasa nasionalisme, disiplin, dan cinta tanah air pada seluruh warga sekolah.</p>
-        </div>
-      </div>
-      <div class="pb-card">
-        <div class="pb-icon">📚</div>
-        <div class="pb-content">
-          <div class="pb-time">15 Menit Sebelum Belajar</div>
-          <h4>Literasi Pagi</h4>
-          <p>Program membaca buku non-pelajaran selama 15 menit setiap hari sebagai upaya meningkatkan budaya literasi siswa.</p>
-        </div>
-      </div>
-      <div class="pb-card">
-        <div class="pb-icon">🧹</div>
-        <div class="pb-content">
-          <div class="pb-time">Setiap Hari</div>
-          <h4>Piket Kebersihan Kelas</h4>
-          <p>Siswa bergiliran membersihkan kelas sebelum dan sesudah pelajaran untuk menumbuhkan rasa tanggung jawab dan kepedulian lingkungan.</p>
-        </div>
-      </div>
-      <div class="pb-card">
-        <div class="pb-icon">🤝</div>
-        <div class="pb-content">
-          <div class="pb-time">Setiap Hari</div>
-          <h4>5S (Senyum, Salam, Sapa, Sopan, Santun)</h4>
-          <p>Pembiasaan karakter unggul melalui budaya 5S kepada guru, sesama siswa, dan warga sekolah setiap hari.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- BERITA & PENGUMUMAN -->
-<section class="section" id="berita">
-  <div class="container">
-    <div class="sec-tag">Informasi Terkini</div>
-    <h2 class="sec-title">Berita &amp;<br>Pengumuman</h2>
-    <div class="bar"></div>
-    <div class="berita-tabs">
-      <button class="tab-btn active" onclick="filterBerita('semua',this)">Semua</button>
-      <button class="tab-btn" onclick="filterBerita('berita',this)">Berita</button>
-      <button class="tab-btn" onclick="filterBerita('pengumuman',this)">Pengumuman</button>
-      <button class="tab-btn" onclick="filterBerita('kegiatan',this)">Kegiatan</button>
-    </div>
-    <div class="berita-grid" id="beritaGrid">
-      <div class="loading-state" style="grid-column:1/-1">
-        <div class="loading-spinner"></div>Memuat berita...
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- PROFIL SEKOLAH -->
-<section class="section" id="profil">
-  <div class="container">
-    <div class="sec-tag">Tentang Kami</div>
-    <h2 class="sec-title">Profil<br>Sekolah</h2>
-    <div class="bar"></div>
-    <div class="profil-grid">
-      <div class="profil-nav">
-        <button class="profil-nav-btn active" onclick="showPanel('sejarah',this)">
-          <span class="icon">📜</span> Sejarah Singkat
-        </button>
-        <button class="profil-nav-btn" onclick="showPanel('visi',this)">
-          <span class="icon">🔭</span> Visi
-        </button>
-        <button class="profil-nav-btn" onclick="showPanel('misi',this)">
-          <span class="icon">🎯</span> Misi
-        </button>
-        <button class="profil-nav-btn" onclick="showPanel('tujuan',this)">
-          <span class="icon">🏆</span> Tujuan
-        </button>
-        <button class="profil-nav-btn" onclick="showPanel('struktur',this)">
-          <span class="icon">🏛️</span> Data personil SD KETAPANG
-        </button>
-        <button class="profil-nav-btn" onclick="showPanel('akreditasi',this)">
-          <span class="icon">⭐</span> Akreditasi
-        </button>
-      </div>
-      <div class="profil-content">
-        <div class="profil-panel active" id="panel-sejarah">
-          <div class="loading-state"><div class="loading-spinner"></div>Memuat data...</div>
-        </div>
-        <div class="profil-panel" id="panel-visi">
-          <div class="loading-state"><div class="loading-spinner"></div>Memuat data...</div>
-        </div>
-        <div class="profil-panel" id="panel-misi">
-          <div class="loading-state"><div class="loading-spinner"></div>Memuat data...</div>
-        </div>
-        <div class="profil-panel" id="panel-tujuan">
-          <div class="loading-state"><div class="loading-spinner"></div>Memuat data...</div>
-        </div>
-        <div class="profil-panel" id="panel-struktur">
-          <div class="loading-state"><div class="loading-spinner"></div>Memuat data...</div>
-        </div>
-        <div class="profil-panel" id="panel-akreditasi">
-          <div class="loading-state"><div class="loading-spinner"></div>Memuat data...</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- GURU & STAFF -->
-<section class="section" id="guru">
-  <div class="container">
-    <div class="sec-tag">Tenaga Pendidik</div>
-    <h2 class="sec-title">Data Personil<br>SDN Ketapang</h2>
-    <div class="bar"></div>
-    <div class="guru-filter">
-      <button class="filter-btn active" onclick="filterGuru('semua',this)">Semua</button>
-      <button class="filter-btn" onclick="filterGuru('kepala',this)">Kepala Sekolah</button>
-      <button class="filter-btn" onclick="filterGuru('guru',this)">Guru</button>
-      <button class="filter-btn" onclick="filterGuru('tata_usaha',this)">Tata Usaha</button>
-      <button class="filter-btn" onclick="filterGuru('staff',this)">Staff</button>
-    </div>
-    <div class="guru-grid" id="guruGrid">
-      <div class="loading-state" style="grid-column:1/-1">
-        <div class="loading-spinner"></div>Memuat data guru...
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- GALERI -->
-<section class="section" id="galeri">
-  <div class="container">
-    <div class="sec-tag">Dokumentasi</div>
-    <h2 class="sec-title">Galeri<br>Foto</h2>
-    <div class="bar"></div>
-    <div class="galeri-tabs">
-      <button class="galeri-tab active" onclick="filterGaleri('semua',this)">Semua</button>
-      <button class="galeri-tab" onclick="filterGaleri('kegiatan',this)">Kegiatan</button>
-      <button class="galeri-tab" onclick="filterGaleri('prestasi',this)">Prestasi</button>
-      <button class="galeri-tab" onclick="filterGaleri('fasilitas',this)">Fasilitas</button>
-      <button class="galeri-tab" onclick="filterGaleri('ekskul',this)">Ekskul</button>
-    </div>
-    <div class="galeri-grid" id="galeriGrid">
-      <div class="loading-state" style="grid-column:1/-1;color:rgba(149, 149, 149, 0.5)">
-        <div class="loading-spinner"></div>Memuat galeri...
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- FASILITAS & EKSKUL -->
-<section class="section" id="fasilitas">
-  <div class="container">
-    <div class="sec-tag">Sarana &amp; Pengembangan</div>
-    <h2 class="sec-title">Fasilitas &amp;<br>Ekstrakurikuler</h2>
-    <div class="bar"></div>
-    <div class="fas-ekskul-grid">
-      <div>
-        <h3 style="font-family:'Lora',serif;font-size:20px;margin-bottom:4px;">Fasilitas Sekolah</h3>
-        <p style="color:var(--muted);font-size:14px;">Sarana pendukung kegiatan belajar mengajar yang lengkap dan terawat.</p>
-        <div class="fas-list" id="fasilitasList">
-          <div class="loading-state"><div class="loading-spinner"></div></div>
-        </div>
-      </div>
-      <div class="ekskul-wrap">
-        <h3 style="font-family:'Lora',serif;font-size:20px;margin-bottom:4px;">Ekstrakurikuler Aktif</h3>
-        <p style="color:var(--muted);font-size:14px;margin-bottom:20px;">Pengembangan bakat dan minat di luar kegiatan akademik.</p>
-        <div class="ekskul-chips" id="ekskulChips">
-          <div class="loading-state"><div class="loading-spinner"></div></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- PRESTASI -->
-<section class="section" id="prestasi">
-  <div class="container">
-    <div class="sec-tag">Kebanggaan Kami</div>
-    <h2 class="sec-title">Prestasi<br>Sekolah</h2>
-    <div class="bar"></div>
-    <p class="sec-desc">Pencapaian yang diraih oleh siswa-siswi dan sekolah dalam berbagai bidang.</p>
-    <div class="prestasi-grid" id="prestasiGrid">
-      <div class="loading-state" style="grid-column:1/-1">
-        <div class="loading-spinner"></div>Memuat data prestasi...
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- BUKU TAMU / KONTAK -->
-<section class="section" id="buku-tamu">
-  <div class="container">
-    <div class="sec-tag">Hubungi Kami</div>
-    <h2 class="sec-title">Buku Tamu &amp;<br>Kontak Digital</h2>
-    <div class="bar"></div>
-    <p class="sec-desc">Kirimkan pesan, pertanyaan, atau saran Anda langsung kepada kami.</p>
-    <div class="form-grid">
-      <div class="form-wrap">
-        <h3 style="font-family:'Lora',serif;color:rgb(10, 8, 8);margin-bottom:24px;">Kirim Pesan</h3>
-        <div class="form-group">
-          <label>Nama Lengkap *</label>
-          <input type="text" id="f-nama" placeholder="Masukkan nama lengkap Anda"/>
-        </div>
-        <div class="form-group">
-          <label>Nomor HP / WhatsApp</label>
-          <input type="tel" id="f-hp" placeholder="Contoh: 0812XXXXXXXX"/>
-        </div>
-        <div class="form-group">
-          <label>Email</label>
-          <input type="email" id="f-email" placeholder="nama@email.com"/>
-        </div>
-        <div class="form-group">
-          <label>Keperluan *</label>
-          <select id="f-keperluan">
-            <option value="">-- Pilih keperluan --</option>
-            <option>Informasi Pendaftaran / PPDB</option>
-            <option>Pertanyaan tentang Kurikulum</option>
-            <option>Pertanyaan tentang Fasilitas</option>
-            <option>Kerjasama / Instansi</option>
-            <option>Saran &amp; Masukan</option>
-            <option>Lainnya</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Pesan *</label>
-          <textarea id="f-pesan" placeholder="Tuliskan pesan atau pertanyaan Anda di sini..."></textarea>
-        </div>
-        <button class="form-submit" onclick="submitForm()">Kirim Pesan ✉️</button>
-        <div class="success-msg" id="successMsg">
-          ✅ Pesan Anda berhasil dikirim! Kami akan merespons dalam 1–2 hari kerja.
-        </div>
-        <div class="error-msg" id="errorMsg"></div>
-      </div>
-      <div class="form-info">
-        <h3>Informasi Kontak</h3>
-        <div class="info-item">
-          <div class="info-icon">📍</div>
-          <div class="info-detail">
-            <h4>Alamat</h4>
-            <p>Jl. Raya Ketapang RT 05/05,<br>Ketapang, Kec. Cipondoh,<br>Kab. Tangerang, Banten<br>Kode Pos: 15147</p>
-          </div>
-        </div>
-        <div class="info-item">
-          <div class="info-icon">📞</div>
-          <div class="info-detail">
-            <h4>Telepon</h4>
-            <p>(082211617039)</p>
-          </div>
-        </div>
-        <div class="info-item">
-          <div class="info-icon">✉️</div>
-          <div class="info-detail">
-            <h4>Email Resmi</h4>
-            <p>sdnketapan9@gmail.com</p>
-          </div>
-        </div>
-        <div class="info-item">
-          <div class="info-icon">⏰</div>
-          <div class="info-detail">
-            <h4>Jam Operasional</h4>
-            <p>Senin – Jumat: 07.00 – 13.30 WIB<br>Sabtu: 07.00 – 11.00 WIB</p>
-          </div>
-        </div>
-        <div id="kontak">
-          <div class="map-frame">
-            <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3966.6052531416385!2d106.6941895!3d-6.1835535!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x2e69f9b478cfcbf7%3A0x43491718707b726e!2sSekolah%20Dasar%20Negeri%20Ketapang!5e0!3m2!1sid!2sid!4v1781436109787!5m2!1sid!2sid" 
-            width="100%" 
-            height="400" 
-            style="border:0;" 
-            allowfullscreen="" >
-            </iframe>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- FOOTER -->
-<footer>
-  <div>
-    <div class="f-brand">SDN Ketapang</div>
-    <div style="font-size:12px;margin-top:4px;">© 2025 SDN Ketapang. Semua hak dilindungi.</div>
-  </div>
-  <div class="f-links">
-    <a href="#berita">Berita</a>
-    <a href="#profil">Profil</a>
-    <a href="#guru">Guru</a>
-    <a href="#galeri">Galeri</a>
-    <a href="#buku-tamu">Kontak</a>
-  </div>
-</footer>
-
-<!-- MODAL GALERI -->
-<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
-  <div class="modal-box">
-    <button class="modal-close" onclick="closeModal()">✕</button>
-    <div class="modal-img-placeholder" id="modalImg">🏫</div>
-    <h3 id="modalTitle">Judul Foto</h3>
-    <p id="modalDesc">Deskripsi foto.</p>
-  </div>
-</div>
-
-<script src="assets/js/script.js"></script>
-</body>
-</html>
+  </header>
+  <div class="page-body">

@@ -1,391 +1,238 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Detail Berita — SDN Ketapang</title>
-<meta name="description" content="Detail berita dan pengumuman SDN Ketapang"/>
-<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,600;0,700;1,500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="assets/css/style.css"/>
-<style>
-  /* ===== DETAIL PAGE STYLES ===== */
-  .detail-wrapper {
-    max-width: 860px;
-    margin: 0 auto;
-    padding: 40px 20px 60px;
-  }
-  .breadcrumb {
-    font-size: 13px;
-    color: var(--muted);
-    margin-bottom: 28px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-  .breadcrumb a {
-    color: var(--red);
-    text-decoration: none;
-    font-weight: 500;
-  }
-  .breadcrumb a:hover { text-decoration: underline; }
-  .breadcrumb span { color: var(--muted); }
+<?php
+$pageTitle  = 'Guru & Staf';
+$pageActive = 'guru';
+require_once 'auth.php';
 
-  .detail-header { margin-bottom: 28px; }
-  .detail-cat {
-    display: inline-block;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 4px 12px;
-    border-radius: 20px;
-    text-transform: capitalize;
-    margin-bottom: 14px;
-  }
-  .detail-title {
-    font-family: 'Lora', serif;
-    font-size: clamp(22px, 4vw, 34px);
-    font-weight: 700;
-    color: var(--dark);
-    line-height: 1.35;
-    margin-bottom: 14px;
-  }
-  .detail-meta {
-    font-size: 13px;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
-  .detail-meta span { display: flex; align-items: center; gap: 5px; }
+$db  = getDB();
+$msg = '';
 
-  .detail-cover {
-    width: 100%;
-    height: 380px;
-    object-fit: cover;
-    border-radius: 12px;
-    margin-bottom: 36px;
-    background: var(--cream);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 72px;
-  }
-  .detail-cover img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 12px;
-    display: block;
-  }
-  .detail-cover-emoji {
-    width: 100%;
-    height: 380px;
-    background: var(--cream);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 80px;
-    margin-bottom: 36px;
-  }
+// Upload foto helper
+function uploadFoto($fileKey, $oldFoto = '') {
+    if (empty($_FILES[$fileKey]['name'])) return $oldFoto;
+    $uploadDir = __DIR__ . '/../assets/img/guru/';
+    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+    $ext = strtolower(pathinfo($_FILES[$fileKey]['name'], PATHINFO_EXTENSION));
+    $allowed = ['jpg','jpeg','png','webp'];
+    if (!in_array($ext, $allowed)) return $oldFoto;
+    $filename = 'guru_' . time() . '_' . rand(100,999) . '.' . $ext;
+    move_uploaded_file($_FILES[$fileKey]['tmp_name'], $uploadDir . $filename);
+    return 'assets/img/guru/' . $filename;
+}
 
-  .detail-body {
-    font-size: 16px;
-    line-height: 1.85;
-    color: var(--text);
-  }
-  .detail-body p { margin-bottom: 18px; }
-  .detail-body h2, .detail-body h3 {
-    font-family: 'Lora', serif;
-    color: var(--dark);
-    margin: 28px 0 12px;
-  }
-  .detail-divider {
-    border: none;
-    border-top: 1px solid #e5e7eb;
-    margin: 40px 0;
-  }
+// DELETE
+if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
+    $db->prepare("UPDATE guru SET is_active=0 WHERE id=?")->execute([(int)$_GET['delete']]);
+    header('Location: guru.php?msg=deleted'); exit;
+}
 
-  /* ===== BERITA TERKAIT ===== */
-  .terkait-section { margin-top: 48px; }
-  .terkait-title {
-    font-family: 'Lora', serif;
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--dark);
-    margin-bottom: 24px;
-    position: relative;
-    padding-left: 14px;
-  }
-  .terkait-title::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 4px;
-    width: 4px; height: 80%;
-    background: var(--red);
-    border-radius: 2px;
-  }
-  .terkait-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 20px;
-  }
-  .terkait-card {
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 2px 12px rgba(0,0,0,.07);
-    overflow: hidden;
-    transition: transform .2s, box-shadow .2s;
-    text-decoration: none;
-    color: inherit;
-    display: block;
-  }
-  .terkait-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 28px rgba(0,0,0,.12);
-  }
-  .terkait-img {
-    height: 140px;
-    background: var(--cream);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 40px;
-    overflow: hidden;
-  }
-  .terkait-img img { width: 100%; height: 100%; object-fit: cover; }
-  .terkait-body { padding: 14px 16px 16px; }
-  .terkait-body h5 {
-    font-family: 'Lora', serif;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--dark);
-    line-height: 1.4;
-    margin-bottom: 6px;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-  .terkait-body small { font-size: 12px; color: var(--muted); }
+// SAVE
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $id        = (int)($_POST['id'] ?? 0);
+    $nama      = trim($_POST['nama'] ?? '');
+    $nip       = trim($_POST['nip'] ?? '');
+    $jabatan   = trim($_POST['jabatan'] ?? '');
+    $jabSingkat= $_POST['jabatan_singkat'] ?? 'guru';
+    $mapel     = trim($_POST['mapel'] ?? '');
+    $bidang    = trim($_POST['bidang'] ?? '');
+    $kelas     = trim($_POST['kelas'] ?? '');
+    $pendidikan= trim($_POST['pendidikan'] ?? '');
+    $email     = trim($_POST['email'] ?? '');
+    $urutan    = (int)($_POST['urutan'] ?? 0);
+    $oldFoto   = $_POST['old_foto'] ?? '';
+    $foto      = uploadFoto('foto', $oldFoto);
 
-  /* ===== BACK BUTTON ===== */
-  .btn-back {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--red);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    transition: background .2s;
-    margin-bottom: 32px;
-  }
-  .btn-back:hover { background: var(--red2); }
+    if ($id) {
+        $db->prepare("UPDATE guru SET nama=?,nip=?,jabatan=?,jabatan_singkat=?,mapel=?,bidang=?,kelas=?,pendidikan=?,email=?,urutan=?,foto=? WHERE id=?")
+           ->execute([$nama,$nip,$jabatan,$jabSingkat,$mapel,$bidang,$kelas,$pendidikan,$email,$urutan,$foto,$id]);
+    } else {
+        $db->prepare("INSERT INTO guru (nama,nip,jabatan,jabatan_singkat,mapel,bidang,kelas,pendidikan,email,urutan,foto) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+           ->execute([$nama,$nip,$jabatan,$jabSingkat,$mapel,$bidang,$kelas,$pendidikan,$email,$urutan,$foto]);
+    }
+    header('Location: guru.php?msg=saved'); exit;
+}
 
-  /* ===== LOADING / ERROR STATES ===== */
-  .page-loading, .page-error {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 50vh;
-    gap: 16px;
-    color: var(--muted);
-    text-align: center;
-  }
-  .page-loading .loading-spinner {
-    width: 40px; height: 40px;
-    border: 3px solid #e5e7eb;
-    border-top-color: var(--red);
-    border-radius: 50%;
-    animation: spin .7s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .page-error h3 { font-size: 48px; margin-bottom: 4px; }
+$edit = null;
+if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
+    $s = $db->prepare("SELECT * FROM guru WHERE id=?");
+    $s->execute([(int)$_GET['edit']]);
+    $edit = $s->fetch();
+}
+$showForm = isset($_GET['action']) || $edit;
 
-  /* ===== RESPONSIVE ===== */
-  @media (max-width: 600px) {
-    .detail-cover, .detail-cover-emoji { height: 220px; }
-    .terkait-grid { grid-template-columns: 1fr; }
-  }
-</style>
-</head>
-<body>
+$filter = $_GET['filter'] ?? 'semua';
+if ($filter !== 'semua') {
+    $stmt = $db->prepare("SELECT * FROM guru WHERE is_active=1 AND jabatan_singkat=? ORDER BY urutan");
+    $stmt->execute([$filter]);
+} else {
+    $stmt = $db->query("SELECT * FROM guru WHERE is_active=1 ORDER BY urutan");
+}
+$list = $stmt->fetchAll();
 
-<!-- TOPBAR -->
-<div id="topbar">
-  <span>📍 Jl. Ketapang No. 1, Ketapang</span>
-  <div class="tb-right">
-    <span>📞 (0534) 123456</span>
-    <span>✉️ sdnketapang@sch.id</span>
+if (isset($_GET['msg'])) {
+    $msg = $_GET['msg']==='saved' ? '✅ Data guru berhasil disimpan!' : '🗑️ Data guru berhasil dihapus.';
+}
+
+require_once 'layout.php';
+?>
+
+<?php if ($msg): ?><div class="alert alert-success"><?= $msg ?></div><?php endif; ?>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+  <div class="page-tabs">
+    <button class="page-tab <?= !$showForm?'active':'' ?>" onclick="location='guru.php'">📋 Daftar</button>
+    <button class="page-tab <?= $showForm?'active':'' ?>" onclick="location='guru.php?action=new'"><?= $edit?'✏️ Edit':'➕ Tambah' ?></button>
   </div>
+  <?php if (!$showForm): ?>
+  <select onchange="location='guru.php?filter='+this.value" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;">
+    <option value="semua" <?= $filter==='semua'?'selected':'' ?>>Semua</option>
+    <option value="kepala" <?= $filter==='kepala'?'selected':'' ?>>Kepala Sekolah</option>
+    <option value="guru" <?= $filter==='guru'?'selected':'' ?>>Guru</option>
+    <option value="tata_usaha" <?= $filter==='tata_usaha'?'selected':'' ?>>Tata Usaha</option>
+    <option value="staff" <?= $filter==='staff'?'selected':'' ?>>Staff</option>
+  </select>
+  <?php endif; ?>
 </div>
 
-<!-- NAVBAR -->
-<nav id="navbar">
-  <div class="nav-brand">
-    <div class="nav-logo">SDN<br>KTP</div>
-    <div class="nav-name">
-      SDN Ketapang
-      <small>Sekolah Dasar Negeri</small>
-    </div>
+<?php if ($showForm): ?>
+<div class="card">
+  <div class="card-head">
+    <h2><?= $edit ? '✏️ Edit Data Guru' : '➕ Tambah Guru / Staf' ?></h2>
+    <a href="guru.php" class="btn btn-outline btn-sm">← Kembali</a>
   </div>
-  <ul class="nav-menu" id="navMenu">
-    <li><a href="index.html#berita" class="nav-link">Berita</a></li>
-    <li><a href="index.html#profil" class="nav-link">Profil</a></li>
-    <li><a href="index.html#guru" class="nav-link">Guru</a></li>
-    <li><a href="index.html#galeri" class="nav-link">Galeri</a></li>
-    <li><a href="index.html#fasilitas" class="nav-link">Fasilitas</a></li>
-    <li><a href="index.html#prestasi" class="nav-link">Prestasi</a></li>
-    <li><a href="index.html#buku-tamu" class="nav-link">Kontak</a></li>
-  </ul>
-  <button class="nav-cta" onclick="window.location.href='index.html#buku-tamu'">Hubungi Kami</button>
-  <button class="hamburger" id="hamburger" onclick="toggleMenu()">
-    <span></span><span></span><span></span>
-  </button>
-</nav>
-
-<!-- MAIN CONTENT -->
-<main style="padding-top: 80px; background: var(--white); min-height: 100vh;">
-  <div class="detail-wrapper" id="mainContent">
-    <div class="page-loading">
-      <div class="loading-spinner"></div>
-      <p>Memuat berita...</p>
-    </div>
+  <div class="card-body">
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="id" value="<?= $edit['id'] ?? 0 ?>"/>
+      <input type="hidden" name="old_foto" value="<?= $edit['foto'] ?? '' ?>"/>
+      <div class="form-row">
+        <!-- Foto Upload -->
+        <div class="form-group full" style="text-align:center">
+          <label>Foto (Opsional)</label>
+          <?php if (!empty($edit['foto'])): ?>
+            <img src="../<?= htmlspecialchars($edit['foto']) ?>" class="photo-preview" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👤</text></svg>'"/>
+          <?php else: ?>
+            <div style="width:100px;height:100px;background:#f5f5f5;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:40px;margin:0 auto 8px;">👤</div>
+          <?php endif; ?>
+          <div class="photo-upload" onclick="document.getElementById('fotoInput').click()">
+            <input type="file" id="fotoInput" name="foto" accept="image/*" onchange="previewFoto(this)"/>
+            <div>📷 Klik untuk upload foto</div>
+            <div style="font-size:11px;color:#999;margin-top:4px">JPG, PNG, WebP — maks 2MB</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Nama Lengkap + Gelar *</label>
+          <input type="text" name="nama" value="<?= htmlspecialchars($edit['nama']??'') ?>" placeholder="Contoh: Budi Santoso, S.Pd." required/>
+        </div>
+        <div class="form-group">
+          <label>NIP</label>
+          <input type="text" name="nip" value="<?= htmlspecialchars($edit['nip']??'') ?>" placeholder="Kosongkan jika honorer"/>
+        </div>
+        <div class="form-group">
+          <label>Jabatan Lengkap *</label>
+          <input type="text" name="jabatan" value="<?= htmlspecialchars($edit['jabatan']??'') ?>" placeholder="Contoh: Guru Kelas IV" required/>
+        </div>
+        <div class="form-group">
+          <label>Kategori</label>
+          <select name="jabatan_singkat">
+            <option value="kepala" <?= ($edit['jabatan_singkat']??'')==='kepala'?'selected':'' ?>>Kepala Sekolah</option>
+            <option value="guru" <?= ($edit['jabatan_singkat']??'guru')==='guru'?'selected':'' ?>>Guru</option>
+            <option value="tata_usaha" <?= ($edit['jabatan_singkat']??'')==='tata_usaha'?'selected':'' ?>>Tata Usaha</option>
+            <option value="staff" <?= ($edit['jabatan_singkat']??'')==='staff'?'selected':'' ?>>Staff / Penjaga</option>
+            <option value="honor" <?= ($edit['jabatan_singkat']??'')==='honor'?'selected':'' ?>>Honorer</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Mata Pelajaran / Bidang</label>
+          <input type="text" name="mapel" value="<?= htmlspecialchars($edit['mapel']??'') ?>" placeholder="Contoh: Matematika, Tematik"/>
+        </div>
+        <div class="form-group">
+          <label>Kelas Diajar</label>
+          <input type="text" name="kelas" value="<?= htmlspecialchars($edit['kelas']??'') ?>" placeholder="Contoh: IV A & IV B"/>
+        </div>
+        <div class="form-group">
+          <label>Pendidikan Terakhir</label>
+          <input type="text" name="pendidikan" value="<?= htmlspecialchars($edit['pendidikan']??'') ?>" placeholder="Contoh: S1 PGSD"/>
+        </div>
+        <div class="form-group">
+          <label>Bidang</label>
+          <input type="text" name="bidang" value="<?= htmlspecialchars($edit['bidang']??'') ?>" placeholder="Contoh: Kelas IV"/>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" name="email" value="<?= htmlspecialchars($edit['email']??'') ?>" placeholder="guru@email.com"/>
+        </div>
+        <div class="form-group">
+          <label>Urutan Tampil</label>
+          <input type="number" name="urutan" value="<?= $edit['urutan']??0 ?>" min="0"/>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+        <a href="guru.php" class="btn btn-outline">Batal</a>
+        <button type="submit" class="btn btn-primary">💾 Simpan</button>
+      </div>
+    </form>
   </div>
-</main>
-
-<!-- FOOTER -->
-<footer style="background:var(--dark2);color:#aaa;padding:28px 20px;text-align:center;font-size:13px;">
-  <p style="margin:0;">© 2025 SDN Ketapang — Sekolah Dasar Negeri Ketapang. Hak Cipta Dilindungi.</p>
-</footer>
-
+</div>
 <script>
-const API_BASE = 'api/';
-const catClass = { berita: 'cat-berita', pengumuman: 'cat-pengumuman', kegiatan: 'cat-kegiatan' };
-
-function toggleMenu() {
-  document.getElementById('navMenu').classList.toggle('open');
-}
-
-// Ambil ID dari query string
-function getParam(key) {
-  return new URLSearchParams(window.location.search).get(key);
-}
-
-// Render gambar atau emoji
-function renderCover(berita) {
-  if (berita.gambar) {
-    return `<div class="detail-cover"><img src="uploads/${berita.gambar}" alt="${berita.judul}" onerror="this.parentElement.innerHTML='<span style=font-size:72px>${berita.icon || '📰'}</span>'"/></div>`;
-  }
-  return `<div class="detail-cover-emoji">${berita.icon || '📰'}</div>`;
-}
-
-// Render berita terkait
-function renderTerkait(list) {
-  if (!list || list.length === 0) return '';
-  const cards = list.map(b => {
-    const imgEl = b.gambar
-      ? `<img src="uploads/${b.gambar}" alt="${b.judul}" onerror="this.parentElement.innerHTML='<span style=font-size:36px>${b.icon || '📰'}</span>'">`
-      : (b.icon || '📰');
-    return `
-      <a href="berita-detail.php?id=${b.id}" class="terkait-card">
-        <div class="terkait-img">${imgEl}</div>
-        <div class="terkait-body">
-          <span class="detail-cat ${catClass[b.kategori] || 'cat-berita'}" style="font-size:11px;padding:3px 10px;">${b.kategori}</span>
-          <h5>${b.judul}</h5>
-          <small>📅 ${b.tanggal_format}</small>
-        </div>
-      </a>`;
-  }).join('');
-  return `
-    <hr class="detail-divider"/>
-    <div class="terkait-section">
-      <h3 class="terkait-title">Berita Terkait</h3>
-      <div class="terkait-grid">${cards}</div>
-    </div>`;
-}
-
-// Format isi berita: bungkus newline jadi paragraf
-function formatIsi(isi) {
-  if (!isi) return '<p><em>Tidak ada konten tersedia.</em></p>';
-  // Jika sudah ada tag HTML, tampilkan langsung
-  if (/<[a-z][\s\S]*>/i.test(isi)) return isi;
-  // Jika plain text, bungkus tiap paragraf
-  return isi.split(/\n\n+/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
-}
-
-async function loadDetail() {
-  const id = getParam('id');
-  const container = document.getElementById('mainContent');
-
-  if (!id || isNaN(id)) {
-    container.innerHTML = `
-      <div class="page-error">
-        <h3>⚠️</h3>
-        <p>ID berita tidak valid.</p>
-        <a href="index.html#berita" class="btn-back">← Kembali ke Beranda</a>
-      </div>`;
-    return;
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}berita_detail.php?id=${id}`);
-    if (!res.ok) throw new Error(res.status);
-    const b = await res.json();
-
-    if (b.error) throw new Error(b.error);
-
-    // Update title
-    document.title = `${b.judul} — SDN Ketapang`;
-
-    container.innerHTML = `
-      <nav class="breadcrumb">
-        <a href="index.html">Beranda</a>
-        <span>›</span>
-        <a href="index.html#berita">Berita & Pengumuman</a>
-        <span>›</span>
-        <span>${b.judul}</span>
-      </nav>
-
-      <a href="index.html#berita" class="btn-back">← Kembali</a>
-
-      <div class="detail-header">
-        <span class="detail-cat ${catClass[b.kategori] || 'cat-berita'}">${b.kategori.charAt(0).toUpperCase() + b.kategori.slice(1)}</span>
-        <h1 class="detail-title">${b.judul}</h1>
-        <div class="detail-meta">
-          <span>📅 ${b.tanggal_format}</span>
-          <span>🏫 SDN Ketapang</span>
-        </div>
-      </div>
-
-      ${renderCover(b)}
-
-      <div class="detail-body">
-        ${formatIsi(b.konten || b.ringkasan)}
-      </div>
-
-      ${renderTerkait(b.terkait)}
-    `;
-  } catch (err) {
-    container.innerHTML = `
-      <div class="page-error">
-        <h3>😕</h3>
-        <p>Berita tidak ditemukan atau terjadi kesalahan.</p>
-        <small style="display:block;margin-bottom:20px;">${err.message}</small>
-        <a href="index.html#berita" class="btn-back">← Kembali ke Beranda</a>
-      </div>`;
+function previewFoto(input) {
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      let prev = document.querySelector('.photo-preview');
+      if (!prev) {
+        prev = document.createElement('img');
+        prev.className = 'photo-preview';
+        input.parentElement.before(prev);
+      }
+      prev.src = e.target.result;
+    };
+    reader.readAsDataURL(input.files[0]);
   }
 }
-
-loadDetail();
 </script>
-</body>
-</html>
+
+<?php else: ?>
+<div class="card">
+  <div class="card-head">
+    <h2>Daftar Guru & Staf <span style="color:#999;font-size:13px;font-weight:400">(<?= count($list) ?> orang)</span></h2>
+  </div>
+  <?php if ($list): ?>
+  <table class="data-table">
+    <thead><tr><th>Foto</th><th>Nama</th><th>Jabatan</th><th>Mapel/Bidang</th><th>NIP</th><th>Aksi</th></tr></thead>
+    <tbody>
+      <?php foreach ($list as $g): ?>
+      <tr>
+        <td>
+          <div class="avatar">
+            <?php if ($g['foto']): ?>
+              <img src="../<?= htmlspecialchars($g['foto']) ?>" onerror="this.style.display='none'"/>
+            <?php else: ?>
+              👤
+            <?php endif; ?>
+          </div>
+        </td>
+        <td>
+          <div style="font-weight:500"><?= htmlspecialchars($g['nama']) ?></div>
+          <div style="font-size:11px;color:#999"><?= htmlspecialchars($g['pendidikan']??'') ?></div>
+        </td>
+        <td>
+          <span class="badge badge-aktif"><?= htmlspecialchars($g['jabatan']) ?></span>
+        </td>
+        <td style="font-size:13px;color:#555"><?= htmlspecialchars($g['mapel']?:$g['bidang']) ?></td>
+        <td style="font-size:12px;color:#999;font-family:monospace"><?= $g['nip'] ?: '<span style="color:#ccc">—</span>' ?></td>
+        <td>
+          <div class="td-actions">
+            <a href="guru.php?edit=<?= $g['id'] ?>" class="btn btn-outline btn-sm">✏️</a>
+            <a href="guru.php?delete=<?= $g['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Hapus data guru ini?')">🗑️</a>
+          </div>
+        </td>
+      </tr>
+      <?php endforeach; ?>
+    </tbody>
+  </table>
+  <?php else: ?>
+  <div class="empty-state"><div>👨‍🏫</div><p>Belum ada data guru. <a href="guru.php?action=new" style="color:var(--red)">Tambah sekarang →</a></p></div>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<?php require_once 'layout_end.php'; ?>
